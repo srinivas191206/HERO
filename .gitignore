@@ -10,7 +10,7 @@ bin/
 obj/
 
 # Databases & local data
-*.db
+# *.db (Commented out to allow backing up local databases)
 *.db-journal
 *.sqlite
 *.sqlite3
@@ -40,7 +40,7 @@ Icon?
 Thumbs.db
 
 # Mobile / Android / iOS build artifacts
-*.apk
+# *.apk (Commented out to allow backing up the APK)
 *.aab
 *.ipa
 frontend/android/build/
