@@ -1,0 +1,39 @@
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron.js",
+  "scripts": {
+    "dev": "next dev -p 3005 -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start -p 3005",
+    "lint": "eslint",
+    "electron:start": "electron .",
+    "electron:package": "electron-packager . EluruPoliceCommandCenter --platform=darwin --arch=x64 --out=dist/ --overwrite --ignore=\"(dist|\\\\.next/cache|android|\\\\.git)\" --extend-info=mac-info.plist"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.0",
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "dexie": "^4.4.3",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.17.0",
+    "next": "16.2.7",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "electron": "^42.4.1",
+    "electron-packager": "^17.1.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.7",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

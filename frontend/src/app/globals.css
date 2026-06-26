@@ -1,0 +1,91 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --color-tactical-black: #F8FAFC;      /* Main light slate canvas background */
+  --color-tactical-panel: #FFFFFF;      /* Clean white card panels */
+  --color-tactical-cyan: #0284C7;       /* Modern Police Sky/Cyan blue */
+  --color-tactical-blue: #1E3A8A;       /* Classic Deep Police Blue */
+  --color-tactical-green: #10B981;      /* Operational Emerald Green */
+  --color-tactical-amber: #F59E0B;      /* Warning Amber */
+  --color-tactical-red: #EF4444;        /* Critical SOS Red */
+  --color-tactical-gray-800: #F1F5F9;   /* Light gray hover states */
+  --color-tactical-gray-900: #E2E8F0;   /* Light headers & separators */
+  
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, Monaco, Consolas, monospace;
+}
+
+:root {
+  --background: #F8FAFC;
+  --foreground: #0F172A;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+/* Custom Telemetry Scrollbars for Light Theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F8FAFC;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border: 1px solid rgba(2, 132, 199, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(2, 132, 199, 0.4);
+}
+
+/* Blinking animations for status LEDs */
+@keyframes led-blink {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.animate-led-blink {
+  animation: led-blink 1.5s infinite;
+}
+
+@keyframes scan-radar {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.animate-radar-scan {
+  animation: scan-radar 4s linear infinite;
+}
+
+/* Modern light glassmorphism panel styles */
+.tactical-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03), 0 1px 3px rgba(15, 23, 42, 0.02);
+}
+
+.tactical-glow-cyan {
+  box-shadow: 0 0 15px rgba(2, 132, 199, 0.08);
+}
+
+.tactical-glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
+.tactical-grid-bg {
+  background-size: 30px 30px;
+  background-image: 
+    linear-gradient(to right, rgba(15, 23, 42, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.015) 1px, transparent 1px);
+}
