@@ -6,7 +6,7 @@ import { ArrowLeft, Compass, Globe2 } from 'lucide-react';
 import { Hero3DGisView, FlyTo3DTarget } from '../../components/shared/Hero3DGisView';
 import { AP_DISTRICTS, getTacticalFacilitiesForDistrict, matchApDistrict } from '../../utils/apDistricts';
 
-export default function FullScreenGis3DPage() {
+export default function FullScreenExplorer3DPage() {
   const router = useRouter();
   const [selectedDistrict, setSelectedDistrict] = useState<string>('');
   const [pendingFlyTo, setPendingFlyTo] = useState<FlyTo3DTarget | null>(null);
@@ -58,7 +58,7 @@ export default function FullScreenGis3DPage() {
             <Compass className="w-5 h-5 text-sky-400" />
             <div>
               <h1 className="text-sm font-black uppercase tracking-wider leading-none">
-                HERO 3D GIS & ULPIN Vertical Property Explorer
+                HERO 3D GIS &amp; ULPIN Vertical Property Explorer
               </h1>
               <p className="text-[10px] text-slate-300 mt-0.5">
                 Andhra Pradesh 28-District Spatial Engine • Floor-by-Floor Tactical Inspection

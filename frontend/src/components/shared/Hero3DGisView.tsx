@@ -72,7 +72,7 @@ export const Hero3DGisView: React.FC<Hero3DGisViewProps> = ({
         params.set('lng', String(centerLng));
       }
     }
-    return `/gis-3d/index.html?${params.toString()}`;
+    return `/gis-3d/viewer.html?${params.toString()}`;
     // Keep initial iframe src stable so switching districts uses postMessage instead of full WebGL reload
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
