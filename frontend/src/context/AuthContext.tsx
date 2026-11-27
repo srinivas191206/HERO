@@ -102,6 +102,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return receivedUser;
       }
 
+      if (typeof window !== 'undefined' && window.location.protocol === 'https:' && !SupabaseStateClient.isConfigured()) {
+        throw new Error(
+          'State Cloud env vars are missing in this Vercel build. Add NEXT_PUBLIC_SUPABASE_URL & NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel and Redeploy.'
+        );
+      }
+
       const response = await fetch(`${getBackendUrl()}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

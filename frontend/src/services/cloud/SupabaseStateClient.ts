@@ -1,8 +1,8 @@
 import { DistrictSummary, User, Incident, AuditLog, Message } from '../../types';
 import { safeRandomUUID } from '../../utils/uuid';
 
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/$/, '');
+const SUPABASE_ANON_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
 
 async function sha256Hex(text: string): Promise<string> {
   if (typeof window !== 'undefined' && window.crypto?.subtle) {
