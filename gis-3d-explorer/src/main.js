@@ -11,6 +11,7 @@ import {
   loadWaterBodies 
 } from './services/osmService.js';
 import { 
+  initBuildingsLayer,
   createBuildingsLayer, 
   setBuildingsVisibility, 
   toggleBuildingExtrusion, 
@@ -108,55 +109,54 @@ async function startApplication() {
       setFloorSlice(level);
     });
 
-    // 3. Load Unified Geospatial Datasets (Aditya + Kakinada)
-    if (loadingText) loadingText.textContent = 'Loading Unified Regional Datasets...';
-    if (loadingSub) loadingSub.textContent = 'Extracting 3,432 buildings, surface parcels & infrastructure...';
-
-    const [buildingsData, roadsData, waterData] = await Promise.all([
-      loadUnifiedBuildings((prog) => {
-        if (loadingSub) loadingSub.textContent = prog.message;
-      }),
-      loadUnifiedRoads(),
-      loadWaterBodies()
-    ]);
-
-    // 4. Render Surface Parcels Layer (Cadastral ground property boundaries)
-    await createParcelsLayer(viewer, buildingsData);
-
-    // 5. Render 3D Architectural Buildings Layer
-    const buildingsResult = await createBuildingsLayer(viewer, buildingsData, (selectedBuilding) => {
+    // 3. Initialize interactive 3D buildings DataSource immediately (zero startup block)
+    const onSelectBuilding = (selectedBuilding) => {
       showSelectedBuilding(selectedBuilding);
       updateParcelContext(selectedBuilding);
-    });
+    };
+    await initBuildingsLayer(viewer, onSelectBuilding);
 
-    // 6. Render Highways & Regional Road Network (ADB Expressway + Urban streets)
-    await createRoadsLayer(viewer, roadsData);
-
-    // 7. Render Transit Facilities: Railway Stations, Bus Stands, Hospitals
-    await createTransitLayers(viewer, (facility) => {
-      showSelectedBuilding(facility);
-      updateParcelContext(facility);
-    });
-
-    // 8. Render Water Bodies
-    if (waterData && waterData.features && waterData.features.length > 0) {
-      await createWaterLayer(viewer, waterData);
-    }
-
-    // 8b. Render Andhra Pradesh 28-District GeoJSON layer (APSDMA boundary + thermal data)
+    // 4. Load lightweight Andhra Pradesh 28-District GeoJSON layer (~91 KB) right away
     let latestHeroDistricts = [];
-    renderAPDistrictsLayer(viewer, { visible: true }).catch(err => {
-      console.warn('AP districts layer deferred error:', err);
+    if (loadingText) loadingText.textContent = 'Loading Andhra Pradesh 28-District Grid...';
+    if (loadingSub) loadingSub.textContent = 'Mapping district boundaries & thermal telemetry...';
+    await renderAPDistrictsLayer(viewer, { visible: true }).catch(err => {
+      console.warn('AP districts layer load warning:', err);
     });
 
-    // Update Stats in UI
-    const bCount = buildingsResult.count;
-    const rCount = roadsData.features ? roadsData.features.length : 252;
-    updateAOIStats(bCount, rCount);
+    // 5. Kick off regional 3,418-building & road datasets asynchronously in the background
+    // so the interactive 3D globe & district map appear immediately without stalling!
+    const backgroundLoad = async () => {
+      try {
+        if (bottomBuildingBadge) bottomBuildingBadge.textContent = 'Streaming 3D buildings...';
+        const [buildingsData, roadsData, waterData] = await Promise.all([
+          loadUnifiedBuildings(),
+          loadUnifiedRoads(),
+          loadWaterBodies()
+        ]);
 
-    if (bottomBuildingBadge) {
-      bottomBuildingBadge.textContent = `${bCount.toLocaleString()} 3D buildings`;
-    }
+        const buildingsResult = await createBuildingsLayer(viewer, buildingsData, onSelectBuilding);
+        await createRoadsLayer(viewer, roadsData);
+        await createTransitLayers(viewer, onSelectBuilding);
+        if (waterData && waterData.features && waterData.features.length > 0) {
+          await createWaterLayer(viewer, waterData);
+        }
+        // Defer surface parcels until after buildings & roads are live
+        setTimeout(() => {
+          createParcelsLayer(viewer, buildingsData).catch(e => console.warn('Parcels deferred:', e));
+        }, 300);
+
+        const bCount = buildingsResult.count;
+        const rCount = roadsData.features ? roadsData.features.length : 252;
+        updateAOIStats(bCount, rCount);
+        if (bottomBuildingBadge) {
+          bottomBuildingBadge.textContent = `${bCount.toLocaleString()} 3D buildings`;
+        }
+      } catch (bgErr) {
+        console.warn('Background GIS dataset load warning:', bgErr);
+      }
+    };
+    backgroundLoad();
 
     // 9. Initialize Left Layer Management & Appearance Panel
     const leftPanelContainer = document.getElementById('left-panel-container');
@@ -353,8 +353,7 @@ async function startApplication() {
     // Check URL query parameters
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('mode') === 'state' || urlParams.get('view') === 'ap') {
-      await renderAPDistrictsLayer(viewer, { visible: true });
-      flyToAndhraPradesh(viewer, 0.5);
+      flyToAndhraPradesh(viewer, 0.4);
     } else if (urlParams.get('district')) {
       const qDist = urlParams.get('district');
       const qLat = parseFloat(urlParams.get('lat') || '');

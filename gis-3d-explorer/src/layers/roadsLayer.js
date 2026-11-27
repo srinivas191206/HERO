@@ -9,6 +9,7 @@ export async function createRoadsLayer(viewer, geojsonData) {
 
   roadsDataSource = new Cesium.CustomDataSource('unified-roads');
   const features = geojsonData.features || [];
+  roadsDataSource.entities.suspendEvents();
 
   features.forEach((feature, index) => {
     if (!feature.geometry || feature.geometry.type !== 'LineString') return;
@@ -54,6 +55,7 @@ export async function createRoadsLayer(viewer, geojsonData) {
     });
   });
 
+  roadsDataSource.entities.resumeEvents();
   await viewer.dataSources.add(roadsDataSource);
   console.log(`Rendered ${roadsDataSource.entities.values.length} road corridors`);
   return roadsDataSource;

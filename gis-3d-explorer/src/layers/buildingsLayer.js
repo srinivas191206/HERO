@@ -29,26 +29,20 @@ let photorealTextureUrl = null;
 let singleFloorTextureUrl = null;
 let schematicTextureUrl = null;
 
-export async function createBuildingsLayer(viewer, geojsonData, onSelectCallback) {
+export async function initBuildingsLayer(viewer, onSelectCallback) {
   viewerInstance = viewer;
   onBuildingSelectedCallback = onSelectCallback;
 
-  if (buildingsDataSource) {
-    viewer.dataSources.remove(buildingsDataSource, true);
-  }
-  if (labelsDataSource) {
-    viewer.dataSources.remove(labelsDataSource, true);
-  }
-  if (detailDataSource) {
-    viewer.dataSources.remove(detailDataSource, true);
+  if (!buildingsDataSource) {
+    buildingsDataSource = new Cesium.CustomDataSource('unified-3d-buildings');
+    labelsDataSource = new Cesium.CustomDataSource('prominent-building-labels');
+    detailDataSource = new Cesium.CustomDataSource('selected-building-details');
+    await viewer.dataSources.add(buildingsDataSource);
+    await viewer.dataSources.add(labelsDataSource);
+    await viewer.dataSources.add(detailDataSource);
+    setupBuildingPicker(viewer);
   }
 
-  buildingsDataSource = new Cesium.CustomDataSource('unified-3d-buildings');
-  labelsDataSource = new Cesium.CustomDataSource('prominent-building-labels');
-  detailDataSource = new Cesium.CustomDataSource('selected-building-details');
-  buildingEntitiesMap.clear();
-
-  // Create facade textures once
   if (!photorealTextureUrl) {
     photorealTextureUrl = createBuildingFacadeTexture({ floors: 6, windowsPerFloor: 8 });
   }
@@ -59,8 +53,16 @@ export async function createBuildingsLayer(viewer, geojsonData, onSelectCallback
     schematicTextureUrl = createSchematicFacadeTexture();
   }
 
+  return { dataSource: buildingsDataSource, count: buildingsDataSource.entities.values.length };
+}
+
+export async function createBuildingsLayer(viewer, geojsonData, onSelectCallback) {
+  await initBuildingsLayer(viewer, onSelectCallback);
+
   const features = geojsonData.features || [];
   console.log(`Processing ${features.length} 3D architectural building models...`);
+  buildingsDataSource.entities.suspendEvents();
+  labelsDataSource.entities.suspendEvents();
 
   features.forEach((feature, index) => {
     if (!feature.geometry || feature.geometry.type !== 'Polygon') return;
@@ -110,8 +112,7 @@ export async function createBuildingsLayer(viewer, geojsonData, onSelectCallback
         material: baseColor,
         outline: showOutlines,
         outlineColor: outlineColor,
-        outlineWidth: 2.0,
-        shadows: Cesium.ShadowMode.ENABLED
+        outlineWidth: 1.5
       },
       properties: new Cesium.PropertyBag({
         id: props.id || index,
@@ -175,10 +176,8 @@ export async function createBuildingsLayer(viewer, geojsonData, onSelectCallback
     }
   });
 
-  await viewer.dataSources.add(buildingsDataSource);
-  await viewer.dataSources.add(labelsDataSource);
-  await viewer.dataSources.add(detailDataSource);
-  setupBuildingPicker(viewer);
+  buildingsDataSource.entities.resumeEvents();
+  labelsDataSource.entities.resumeEvents();
 
   console.log(`Rendered ${buildingsDataSource.entities.values.length} 3D architectural models.`);
   return {

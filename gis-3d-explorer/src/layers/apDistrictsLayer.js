@@ -193,6 +193,7 @@ export async function renderAPDistrictsLayer(viewer, options = {}) {
     await viewer.dataSources.add(apDistrictsDataSource);
   }
 
+  apDistrictsDataSource.entities.suspendEvents();
   apDistrictsDataSource.entities.removeAll();
   apDistrictsDataSource.show = visible;
 
@@ -300,6 +301,7 @@ export async function renderAPDistrictsLayer(viewer, options = {}) {
     });
   });
 
+  apDistrictsDataSource.entities.resumeEvents();
   return features;
 }
 

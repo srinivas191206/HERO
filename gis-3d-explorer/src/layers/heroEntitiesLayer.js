@@ -36,6 +36,7 @@ export async function syncHeroEntitiesLayer(viewer, payload = {}) {
     await viewer.dataSources.add(heroEntitiesDataSource);
   }
 
+  heroEntitiesDataSource.entities.suspendEvents();
   heroEntitiesDataSource.entities.removeAll();
 
   const items = [];
@@ -154,5 +155,6 @@ export async function syncHeroEntitiesLayer(viewer, payload = {}) {
     });
   });
 
+  heroEntitiesDataSource.entities.resumeEvents();
   return items.length;
 }

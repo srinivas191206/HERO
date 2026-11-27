@@ -7,11 +7,13 @@ export async function createParcelsLayer(viewer, buildingsGeoJSON) {
   parcelsDataSource = new Cesium.CustomDataSource('cadastral-parcels');
 
   if (!buildingsGeoJSON || !buildingsGeoJSON.features) {
+    await viewer.dataSources.add(parcelsDataSource);
     return parcelsDataSource;
   }
 
   const features = buildingsGeoJSON.features;
   console.log(`Generating cadastral surface parcels for ${features.length} properties...`);
+  parcelsDataSource.entities.suspendEvents();
 
   features.forEach((feature, index) => {
     if (!feature.geometry || feature.geometry.type !== 'Polygon') return;
@@ -35,11 +37,11 @@ export async function createParcelsLayer(viewer, buildingsGeoJSON) {
       name: `Parcel #${fid}`,
       polygon: {
         hierarchy: Cesium.Cartesian3.fromDegreesArray(parcelCoords),
-        material: Cesium.Color.fromCssColorString('#ffffff').withAlpha(0.04), // subtle property lot fill
+        height: 0.15,
+        material: Cesium.Color.fromCssColorString('#ffffff').withAlpha(0.04),
         outline: true,
-        outlineColor: Cesium.Color.fromCssColorString('#e2e8f0').withAlpha(0.65), // crisp white property boundary line
-        outlineWidth: 1.5,
-        classificationType: Cesium.ClassificationType.BOTH
+        outlineColor: Cesium.Color.fromCssColorString('#e2e8f0').withAlpha(0.55),
+        outlineWidth: 1.0
       },
       properties: new Cesium.PropertyBag({
         parcelId: fid,
@@ -48,6 +50,7 @@ export async function createParcelsLayer(viewer, buildingsGeoJSON) {
     });
   });
 
+  parcelsDataSource.entities.resumeEvents();
   await viewer.dataSources.add(parcelsDataSource);
   console.log(`Loaded ${parcelsDataSource.entities.values.length} surface parcels.`);
   return parcelsDataSource;
