@@ -7,14 +7,30 @@ export type OfficerStatus =
   | 'Lost Connection' 
   | 'Offline';
 
+export type UserRole = 'officer' | 'dispatcher' | 'state_admin';
+
+export interface District {
+  id: string;
+  code: string;
+  name: string;
+  stateName: string;
+  centerLat: number;
+  centerLng: number;
+  nodeKeyHash?: string | null;
+  status: 'online' | 'offline' | 'provisioning';
+  lastSyncAt: number | null;
+  createdAt: number;
+}
+
 export interface User {
   id: string;
   badgeNumber: string;
   name: string;
-  role: 'officer' | 'dispatcher';
+  role: UserRole;
   status: OfficerStatus;
   battery: number;
   teamId: string | null;
+  districtId: string;
   lastHeartbeat: number;
 }
 
@@ -23,6 +39,7 @@ export interface Team {
   name: string;
   description: string;
   color: string;
+  districtId: string;
 }
 
 export interface Incident {
@@ -35,6 +52,7 @@ export interface Incident {
   locationLng: number | null;
   reporterId: string;
   assigneeId: string | null;
+  districtId: string;
   timestamp: number;
   timeline: string; // JSON string of transitions
 }
@@ -44,6 +62,7 @@ export interface Message {
   senderId: string;
   recipientId: string | null;
   teamId: string | null;
+  districtId: string;
   body: string;
   priority: number;
   timestamp: number;
@@ -54,9 +73,11 @@ export interface Evidence {
   id: string;
   officerId: string;
   incidentId: string | null;
+  districtId: string;
   description: string;
   filePath: string;
   hash: string; // SHA-256 integrity checksum
+  hashVerified?: boolean;
   locationLat: number | null;
   locationLng: number | null;
   timestamp: number;
@@ -78,6 +99,7 @@ export interface GPSLog {
 export interface Device {
   deviceId: string;
   officerId: string | null;
+  districtId: string;
   deviceName: string;
   batteryLevel: number;
   networkType: string;
@@ -91,7 +113,20 @@ export interface Device {
 export interface AuditLog {
   id: string;
   userId: string | null;
+  districtId: string | null;
   action: string;
   ipAddress: string | null;
   timestamp: number;
+}
+
+export interface CloudSyncQueueItem {
+  id: string;
+  entityType: 'incident' | 'message' | 'evidence' | 'audit' | 'officer_telemetry' | 'team';
+  entityId: string;
+  districtId: string;
+  payload: string;
+  status: 'pending' | 'synced' | 'failed';
+  retryCount: number;
+  createdAt: number;
+  syncedAt: number | null;
 }

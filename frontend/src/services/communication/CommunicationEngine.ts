@@ -61,24 +61,31 @@ export class CommunicationEngine {
     return message;
   }
 
-  // P1: Send SOS Beacon (Immediate Preemption)
+  // P1: Send SOS Beacon (Immediate Preemption — bypasses queue delay when online)
   async sendSOS(userId: string, lat: number | null, lng: number | null): Promise<void> {
     const payload = {
+      id: safeRandomUUID(),
       userId,
       lat,
       lng,
       timestamp: Date.now()
     };
 
-    // Publish local trigger (trigger sound warning locally)
+    // Publish local trigger immediately
     clientEventBus.publish('sos:local_triggered', payload);
 
-    // Enqueue at P1
-    await clientPriorityEngine.enqueue(
-      'sos',
-      1, // Priority 1 (highest)
-      payload
-    );
+    // Fast path: transmit directly over live Socket.IO immediately for <50ms Command Center alert
+    if (this.transport && this.transport.isConnected()) {
+      try {
+        await this.transport.send(1, 'sos', payload);
+        return;
+      } catch (err) {
+        console.warn('[CommunicationEngine] Fast-path SOS failed, falling back to offline queue:', err);
+      }
+    }
+
+    // Offline fallback: enqueue at P1
+    await clientPriorityEngine.enqueue('sos', 1, payload);
   }
 
   // P6: Send Location telemetry (GPS)
@@ -135,9 +142,10 @@ export class CommunicationEngine {
   // P3: Send Voice Chunk for Walkie-Talkie (Push-To-Talk)
   async sendVoiceChunk(
     senderId: string,
-    audioData: string // base64 string representation
+    audioData: string, // base64 string representation
+    channel: string = 'Command'
   ): Promise<void> {
-    const payload = { senderId, audioData };
+    const payload = { senderId, audioData, channel };
     
     // Voice chunks are treated as Priority 3. If online, send directly for real-time delivery
     if (this.transport && this.transport.isConnected()) {

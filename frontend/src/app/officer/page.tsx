@@ -21,8 +21,8 @@ import { OfficerStatus, Message, Evidence, User, Incident } from '../../types';
 
 export default function OfficerDashboard() {
   const router = useRouter();
-  const { user, logout, token, isAuthenticated, isLoading } = useAuth();
-  const { isOnline, queueSize, triggerLocalSOS, currentLocation, setCurrentLocation } = useApp();
+  const { user, logout, token, isAuthenticated, isLoading, updateUserStatus, updateUserBattery } = useAuth();
+  const { isOnline, queueSize, triggerLocalSOS, currentLocation } = useApp();
   
   const [activeTab, setActiveTab] = useState<'home' | 'map' | 'ptt' | 'messages' | 'evidence'>('home');
   const [isPttActive, setIsPttActive] = useState<boolean>(false);
@@ -50,7 +50,7 @@ export default function OfficerDashboard() {
       senderId: 'u_disp1',
       recipientId: null,
       teamId: 't1',
-      body: 'DISPATCH (D101): Alpha Team, verify location coordinate check near Kurnool Fort.',
+      body: 'DISPATCH (D101): Alpha Team, verify location coordinate check near HQ Control.',
       priority: 5,
       timestamp: Date.now() - 3600000,
       isBroadcast: true
@@ -72,7 +72,14 @@ export default function OfficerDashboard() {
   // Live video stream hooks
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (activeTab === 'messages') {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, activeTab]);
 
   // Track time clock
   useEffect(() => {
@@ -87,45 +94,20 @@ export default function OfficerDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Heartbeat sender daemon (Sends telemetry every 10s if logged in)
+  // Keep AuthContext status/battery synced so AppContext's single real-GPS heartbeat transmits accurate telemetry
   useEffect(() => {
-    if (!user || user.role !== 'officer') return;
+    if (!user) return;
+    if (user.status !== officerStatus) {
+      updateUserStatus(officerStatus);
+    }
+  }, [officerStatus]);
 
-    // Send immediate heartbeat on startup
-    const sendPing = () => {
-      if (!currentLocation) return;
-      
-      // Simulate minor location drift to represent walking/patrolling
-      const driftLat = (Math.random() - 0.5) * 0.0003;
-      const driftLng = (Math.random() - 0.5) * 0.0003;
-      
-      const nextLat = currentLocation.lat + driftLat;
-      const nextLng = currentLocation.lng + driftLng;
-      const nextHeading = Math.floor(Math.random() * 360);
-
-      setCurrentLocation({ lat: nextLat, lng: nextLng, heading: nextHeading });
-
-      clientCommunicationEngine.sendLocation(
-        user.id,
-        localBattery,
-        officerStatus,
-        isOnline ? 'LTE/Wi-Fi' : 'Offline local mesh',
-        {
-          lat: nextLat,
-          lng: nextLng,
-          heading: nextHeading,
-          speed: 4, // 4 km/h walking speed
-          accuracy: 5 // 5m GPS accuracy
-        }
-      );
-    };
-
-    sendPing();
-
-    const heartbeatTimer = setInterval(sendPing, 10000); // 10 seconds interval
-
-    return () => clearInterval(heartbeatTimer);
-  }, [user, isOnline, officerStatus, localBattery]);
+  useEffect(() => {
+    if (!user) return;
+    if (user.battery !== localBattery) {
+      updateUserBattery(localBattery);
+    }
+  }, [localBattery]);
 
   const getBackendUrl = () => {
     if (typeof window !== 'undefined') {
@@ -219,6 +201,7 @@ export default function OfficerDashboard() {
 
     const handleVoiceStream = (data: any) => {
       if (user && data.senderId === user.id) return;
+      if (data.channel && data.channel !== 'Command' && data.channel !== radioChannel) return;
       playChirp(600, 0.08);
       if (data.audioData.startsWith('MOCK_SPEECH:')) {
         const text = data.audioData.replace('MOCK_SPEECH:', '');
@@ -410,13 +393,14 @@ export default function OfficerDashboard() {
     if (!chatMessage.trim()) return;
 
     try {
-      const isDirect = selectedRecipient !== 'all';
+      const isBroadcast = selectedRecipient === 'all';
+      const isTeam = selectedRecipient === 'team';
       const sent = await clientCommunicationEngine.sendMessage({
         senderId: user.id,
-        recipientId: isDirect ? selectedRecipient : null,
-        teamId: isDirect ? null : 't1',
+        recipientId: !isBroadcast && !isTeam ? selectedRecipient : null,
+        teamId: isTeam ? (user.teamId || 't1') : null,
         body: chatMessage,
-        isBroadcast: false
+        isBroadcast
       });
 
       setChatMessages(prev => [...prev, sent]);
@@ -481,7 +465,7 @@ export default function OfficerDashboard() {
             reader.onloadend = () => {
               const base64Audio = reader.result as string;
               // Send base64 audio chunk via clientCommunicationEngine
-              clientCommunicationEngine.sendVoiceChunk(user.id, base64Audio);
+              clientCommunicationEngine.sendVoiceChunk(user.id, base64Audio, radioChannel);
             };
           }
         };
@@ -522,7 +506,7 @@ export default function OfficerDashboard() {
         ? `Officer ${user.name}`
         : (user ? user.name : 'Unknown Officer');
       const synthText = `${displayName} transmitting on Channel ${radioChannel}`;
-      clientCommunicationEngine.sendVoiceChunk(user.id, `MOCK_SPEECH:${synthText}`);
+      clientCommunicationEngine.sendVoiceChunk(user.id, `MOCK_SPEECH:${synthText}`, radioChannel);
     }
   };
 
@@ -616,54 +600,42 @@ export default function OfficerDashboard() {
       {/* Hidden canvas */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* TOP STATUS TELEMETRY BAR */}
-      <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-slate-300 px-6 py-2.5 flex justify-between items-center text-[10px] font-mono select-none font-bold shadow-md z-20">
-        <div className="flex items-center gap-1.5">
-          <span>{currentTime}</span>
-          <span className="text-slate-700">|</span>
-          <span className="text-[9px] uppercase tracking-widest text-sky-450 font-black">POLICE MESH PORTAL</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Wifi className={`w-3.5 h-3.5 ${isOnline ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} />
-          <span className="text-slate-700">|</span>
-          <div className="flex items-center gap-1">
-            <span>BAT: {localBattery}%</span>
-            <div className="w-5 h-2.5 border border-slate-600 rounded-sm p-0.5 flex items-center">
-              <div 
-                className={`h-full rounded-2xs ${localBattery > 20 ? 'bg-emerald-500' : 'bg-red-500'}`} 
-                style={{ width: `${localBattery}%` }} 
-              />
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Indian Style Police Badge Banner (Moved to top as requested) */}
-      <div className="bg-gradient-to-r from-indigo-700 via-blue-800 to-indigo-700 border-b-4 border-amber-400/80 px-5 py-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] relative overflow-hidden text-white select-none z-20">
-        {/* Tricolor flag accent strip at the top */}
+      {/* TOP HERO HEADER CARD */}
+      <div className="bg-[#0B1739] text-white px-5 py-4 shadow-md relative overflow-hidden select-none z-20">
+        {/* Tricolor accent bar */}
         <div className="absolute top-0 left-0 right-0 h-1 flex">
           <div className="flex-1 bg-[#FF9933]" />
           <div className="flex-1 bg-white" />
           <div className="flex-1 bg-[#138808]" />
         </div>
-        <div className="absolute top-3.5 right-4 bg-amber-400/20 border border-amber-400/40 text-amber-200 font-extrabold text-[8px] uppercase tracking-widest px-2.5 py-0.5 rounded-full">
-          కర్నూలు పోలీస్
-        </div>
-        <div className="flex items-center gap-4 mt-2">
-          <div className="w-12 h-12 bg-white/10 backdrop-blur p-1 rounded-2xl flex items-center justify-center shadow-inner border border-white/20 relative">
-            <img src="/ap-police-logo.png" className="w-9 h-9 object-contain" alt="AP Police Logo" />
-          </div>
-          <div>
-            <h2 className="text-xs font-black tracking-wider text-amber-300 uppercase leading-none font-sans flex items-center gap-1.5">
-              KURNOOL DISTRICT POLICE
-            </h2>
-            <h3 className="text-[8px] text-blue-100 uppercase font-mono font-bold tracking-tight mt-1.5 leading-none">
-              ఆంధ్రప్రదేశ్ రాష్ట్ర రక్షక భట శాఖ / AP Police Dept
-            </h3>
-            <div className="flex items-center gap-2 mt-2 font-mono text-[9px] text-blue-200 font-bold leading-none">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#10B981]" />
-              <span>STATION: KURNOOL I-TOWN PS</span>
+
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center gap-3.5">
+            <img src="/hero-logo.png" className="w-12 h-12 object-contain" alt="HERO Emblem" />
+            <div>
+              <h1 className="text-base font-black tracking-widest text-white uppercase leading-none font-sans">
+                HERO
+              </h1>
+              <h2 className="text-[9px] text-slate-300 font-extrabold tracking-wider uppercase mt-1 leading-none">
+                HYBRID EMERGENCY RESPONSE OPERATIONS
+              </h2>
+              <span className="text-[9.5px] text-slate-300 font-bold tracking-wider block mt-1.5 leading-none">
+                सुरक्षित • समन्वित • तत्पर • प्रभावी
+              </span>
             </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-1.5">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase border ${
+              isOnline ? 'border-emerald-500/40 bg-emerald-950/60 text-emerald-400' : 'border-amber-500/40 bg-amber-950/60 text-amber-300'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse shadow-[0_0_6px_#10B981]' : 'bg-amber-400'}`} />
+              {isOnline ? 'CONNECTED' : 'OFFLINE QUEUE'}
+            </span>
+            <span className="text-[8.5px] font-mono text-emerald-400 font-bold tracking-tight">
+              {user.districtCode || 'ELR'} • {isOnline ? 'LOCAL NODE LINKED' : `BUFFERED (${queueSize})`}
+            </span>
           </div>
         </div>
       </div>
@@ -676,7 +648,7 @@ export default function OfficerDashboard() {
               Officer {user.name.split(' ')[1] || user.name}
             </h1>
             <span className="text-[9px] text-slate-400 font-mono mt-1.5 block uppercase tracking-wider font-extrabold">
-              Badge: {user.badgeNumber} • TEAM Alpha
+              Badge: {user.badgeNumber} • {user.districtName || 'District Hub'} ({user.teamId || 'HQ'})
             </span>
           </div>
         </div>
@@ -959,7 +931,7 @@ export default function OfficerDashboard() {
               <div className="w-full flex justify-between items-center border-b border-slate-100 pb-3">
                 <span className="font-sans text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
                   <RadioTower className="w-4 h-4 text-sky-600 animate-pulse" />
-                  Kurnool Police Broadcast Channel
+                  HERO Broadcast Channel
                 </span>
                 <span className="text-[10px] font-sans text-sky-700 font-extrabold bg-sky-50 px-3 py-1 rounded-xl border border-sky-100/50 shadow-sm">
                   {radioChannel.toUpperCase()} CHANNEL
@@ -1064,6 +1036,7 @@ export default function OfficerDashboard() {
                   </div>
                 );
               })}
+              <div ref={chatEndRef} />
             </div>
 
             {/* Message input */}
@@ -1073,8 +1046,9 @@ export default function OfficerDashboard() {
                 onChange={(e) => setSelectedRecipient(e.target.value)}
                 className="bg-slate-700 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs focus:outline-none w-full"
               >
-                <option value="all">Broadcast: All (Team)</option>
-                <option value="hq">Direct: Headquarters</option>
+                <option value="all">Broadcast: All District Units</option>
+                <option value="team">Team Channel ({user.teamId || 't1'})</option>
+                <option value="hq">Direct: District Headquarters</option>
                 {peers.map(peer => (
                   <option key={peer.id} value={peer.id}>Direct: Officer {peer.name}</option>
                 ))}

@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { ITransport } from '../priority/PriorityEngine';
 import { clientEventBus } from '../events/EventBus';
 import { localDb } from '../queue/OfflineDatabase';
+import { UserRole } from '../../types';
 
 const getBackendUrl = () => {
   if (typeof window !== 'undefined') {
@@ -24,13 +25,15 @@ export class SocketTransportProvider implements ITransport {
     this.serverUrl = serverUrl || getBackendUrl();
   }
 
-  connect(userId: string, role: 'officer' | 'dispatcher', teamId: string | null) {
+  connect(userId: string, role: UserRole, teamId: string | null, token?: string | null) {
     if (this.socket) {
       this.socket.disconnect();
     }
 
+    const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('tactical_token') : null);
     console.log(`[SocketTransport] Connecting to command node at: ${this.serverUrl}`);
     this.socket = io(this.serverUrl, {
+      auth: { token: authToken },
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
       timeout: 5000
@@ -39,10 +42,8 @@ export class SocketTransportProvider implements ITransport {
     this.socket.on('connect', () => {
       console.log('[SocketTransport] WebSocket link established.');
       this.connected = true;
-      
-      // Register credentials with Socket server
+
       this.socket?.emit('register', { userId, role, teamId });
-      
       clientEventBus.publish('network:online');
     });
 
@@ -52,14 +53,14 @@ export class SocketTransportProvider implements ITransport {
       clientEventBus.publish('network:offline');
     });
 
-    this.socket.on('connect_error', () => {
+    this.socket.on('connect_error', (err) => {
+      console.warn('[SocketTransport] Connection error:', err?.message);
       if (this.connected) {
         this.connected = false;
         clientEventBus.publish('network:offline');
       }
     });
 
-    // Register operational listeners
     this.initSocketListeners();
   }
 
@@ -71,31 +72,40 @@ export class SocketTransportProvider implements ITransport {
     }
   }
 
-  // Implementation of ITransport.isConnected
+  switchDistrict(districtId: string) {
+    if (this.socket && this.connected && districtId) {
+      this.socket.emit('dispatcher:switch_district', { districtId });
+    }
+  }
+
   isConnected(): boolean {
     return this.connected;
   }
 
-  // Implementation of ITransport.send
   send(priority: number, type: string, payload: any): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.socket || !this.connected) {
         return reject(new Error('Transport disconnected. Item buffered.'));
       }
 
-      // Map communication engine types to Socket.IO events
       let socketEvent = '';
       if (type === 'message') socketEvent = 'message:send';
       else if (type === 'sos') socketEvent = 'sos:trigger';
       else if (type === 'gps') socketEvent = 'heartbeat';
       else if (type === 'evidence') socketEvent = 'evidence:send';
-      else socketEvent = type; // Custom socket event mapping
+      else socketEvent = type;
 
-      // Setup one-time delivery confirmation if the event supports it
-      if (type === 'message' || type === 'evidence') {
+      const supportsAck = type === 'message' || type === 'evidence' || type === 'sos';
+      if (supportsAck) {
         const ackEvent = `${type}:ack`;
-        const ackHandler = (ack: { id: string; status: string; error?: string }) => {
-          if (ack.id === payload.id) {
+        const timeoutHandle = setTimeout(() => {
+          this.socket?.off(ackEvent, ackHandler);
+          reject(new Error(`ACK Timeout: Server response lagged for ${type}.`));
+        }, 10000);
+
+        const ackHandler = (ack: { id?: string; status: string; error?: string }) => {
+          if (!payload.id || !ack.id || ack.id === payload.id) {
+            clearTimeout(timeoutHandle);
             this.socket?.off(ackEvent, ackHandler);
             if (ack.status === 'delivered') {
               resolve({ success: true });
@@ -105,18 +115,11 @@ export class SocketTransportProvider implements ITransport {
           }
         };
         this.socket.on(ackEvent, ackHandler);
-        
-        // Timeout ack after 10 seconds to trigger queue fallback
-        setTimeout(() => {
-          this.socket?.off(ackEvent, ackHandler);
-          reject(new Error(`ACK Timeout: Server response lagged for ${type}.`));
-        }, 10000);
       }
 
       this.socket.emit(socketEvent, payload);
 
-      // Resolve immediately for non-ack events like GPS or PTT chunks
-      if (type !== 'message' && type !== 'evidence') {
+      if (!supportsAck) {
         resolve({ success: true });
       }
     });
@@ -136,17 +139,13 @@ export class SocketTransportProvider implements ITransport {
       clientEventBus.publish('message:received', msg);
     });
 
-    // Listen for critical SOS broadcasts (P1 alerts)
-    this.socket.on('sos:broadcast', async (data: any) => {
+    // Listen for critical SOS broadcasts (P1 alerts) — publish immediately for zero-latency alarm
+    this.socket.on('sos:broadcast', (data: any) => {
       console.log('[SocketTransport] CRITICAL SOS BEACON BROADCAST RECEIVED', data);
-      
-      // Update local incident cache
-      await localDb.cachedIncidents.put(data.incident);
-      
-      // Update local officer status to Emergency
-      await localDb.cachedOfficers.update(data.officerId, { status: 'Emergency' });
-      
       clientEventBus.publish('sos:received', data);
+
+      localDb.cachedIncidents.put(data.incident).catch(() => {});
+      localDb.cachedOfficers.update(data.officerId, { status: 'Emergency' }).catch(() => {});
     });
 
     // Listen for incoming evidence broadcasts

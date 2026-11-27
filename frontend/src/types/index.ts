@@ -7,15 +7,41 @@ export type OfficerStatus =
   | 'Lost Connection' 
   | 'Offline';
 
+export type UserRole = 'officer' | 'dispatcher' | 'state_admin';
+
+export interface District {
+  id: string;
+  code: string;
+  name: string;
+  stateName: string;
+  centerLat: number;
+  centerLng: number;
+  status: 'online' | 'offline' | 'provisioning';
+  lastSyncAt: number | null;
+  createdAt: number;
+}
+
+export interface DistrictSummary extends District {
+  totalOfficers: number;
+  onlineOfficers: number;
+  sosCount: number;
+  activeIncidents: number;
+  p1Count: number;
+  pendingSyncCount: number;
+}
+
 export interface User {
   id: string;
   badgeNumber: string;
   name: string;
-  role: 'officer' | 'dispatcher';
+  role: UserRole;
   status: OfficerStatus;
   battery: number;
   teamId: string | null;
   teamName?: string;
+  districtId?: string;
+  districtName?: string;
+  districtCode?: string;
   lastHeartbeat?: number;
   location?: {
     latitude: number;
@@ -33,6 +59,7 @@ export interface Team {
   name: string;
   description: string;
   color: string;
+  districtId?: string;
 }
 
 export interface Incident {
@@ -45,6 +72,7 @@ export interface Incident {
   locationLng: number | null;
   reporterId: string;
   assigneeId: string | null;
+  districtId?: string;
   timestamp: number;
   timeline: string | Array<{ timestamp: number; event: string }>; // Can be parsed
 }
@@ -54,6 +82,7 @@ export interface Message {
   senderId: string;
   recipientId: string | null;
   teamId: string | null;
+  districtId?: string;
   body: string;
   priority: number;
   timestamp: number;
@@ -65,9 +94,11 @@ export interface Evidence {
   id: string;
   officerId: string;
   incidentId: string | null;
+  districtId?: string;
   description: string;
   filePath: string; // Base64 simulated locally
   hash: string; // SHA-256 integrity validation
+  hashVerified?: boolean;
   locationLat: number | null;
   locationLng: number | null;
   timestamp: number;

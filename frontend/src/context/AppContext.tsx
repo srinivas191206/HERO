@@ -38,64 +38,81 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   // Starting geographic coordinates, default null until geolocation resolves
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number; heading: number; isReal?: boolean } | null>(null);
+  const latestLocationRef = React.useRef<{ lat: number; lng: number; heading: number; isReal?: boolean } | null>(null);
+  const lastLivePushRef = React.useRef<number>(0);
 
-  // Watch real GPS position using HTML5 Geolocation API, with requested coordinates fallback
+  // Watch real GPS position using HTML5 Geolocation API and push live updates
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    // Force the requested coordinates for the Desktop App
-    setCurrentLocation({
-      lat: 17.8167,
-      lng: 83.3426,
-      heading: 0,
-      isReal: true // Treat as real so the map honors it
-    });
-
-    if (!navigator.geolocation) return;
-
-    if (user?.role === 'dispatcher') {
-      console.log('[AppContext] Hardcoding HQ location to 17.8167, 83.3426');
-      return; // Stop watching for HQ
-    }
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
 
     let watchId: number;
 
-    const startWatching = () => {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          console.log('[AppContext] Real GPS coords updated:', position.coords.latitude, position.coords.longitude);
-          setCurrentLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            heading: position.coords.heading || 0,
-            isReal: true
-          });
-        },
-        (error) => {
-          console.warn('[AppContext] Geolocation access failed or denied:', error.message);
-          setCurrentLocation(prev => prev || {
-            lat: 17.8167,
-            lng: 83.3426,
-            heading: 0,
-            isReal: false
-          });
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 5000,
-          maximumAge: 30000
-        }
-      );
+    const updateRealCoords = (position: GeolocationPosition) => {
+      const nextLoc = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        heading: position.coords.heading || 0,
+        isReal: true
+      };
+      latestLocationRef.current = nextLoc;
+      setCurrentLocation(nextLoc);
+
+      // Push live GPS update immediately (throttled to max 1 update / 2s)
+      const now = Date.now();
+      if (user && user.role === 'officer' && now - lastLivePushRef.current >= 2000) {
+        lastLivePushRef.current = now;
+        clientCommunicationEngine.sendLocation(
+          user.id,
+          user.battery,
+          user.status,
+          isOnline ? 'LTE/Wi-Fi' : 'Offline local mesh',
+          {
+            lat: nextLoc.lat,
+            lng: nextLoc.lng,
+            heading: nextLoc.heading,
+            speed: position.coords.speed ?? 0,
+            accuracy: position.coords.accuracy ?? 10
+          }
+        );
+      }
     };
 
-    startWatching();
+    // Immediate one-time request for fast initial fix
+    navigator.geolocation.getCurrentPosition(
+      updateRealCoords,
+      (err) => {
+        console.warn('[AppContext] Initial GPS fix failed, using district fallback:', err.message);
+        const fallback = latestLocationRef.current || {
+          lat: 17.6868,
+          lng: 83.2185,
+          heading: 0,
+          isReal: false
+        };
+        latestLocationRef.current = fallback;
+        setCurrentLocation(prev => prev || fallback);
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 }
+    );
+
+    // Continuous watch for real-time location updates
+    watchId = navigator.geolocation.watchPosition(
+      updateRealCoords,
+      (err) => {
+        console.warn('[AppContext] Geolocation watch warning:', err.message);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 1000
+      }
+    );
 
     return () => {
       if (watchId !== undefined) {
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [user?.role]);
+  }, [user?.id, user?.role]);
 
   // Track IndexedDB queue size and trigger periodic synchronization scans
   useEffect(() => {
@@ -159,37 +176,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [isForcedOffline]);
 
-  // Heartbeat sender daemon (Sends telemetry every 10s if logged in)
+  // Live Heartbeat & GPS sender daemon (Every 3s so Command map tracks live movement smoothly)
   useEffect(() => {
     if (!user || user.role !== 'officer') return;
 
-    // Send immediate heartbeat on startup
     const sendPing = () => {
-      setCurrentLocation(prev => {
-        if (!prev) return null;
+      const loc = latestLocationRef.current;
+      if (!loc) return;
 
-        // If using real coordinates or fallback, transmit them as-is
-        clientCommunicationEngine.sendLocation(
-          user.id,
-          user.battery,
-          user.status,
-          isOnline ? 'LTE/Wi-Fi' : 'Offline local mesh',
-          {
-            lat: prev.lat,
-            lng: prev.lng,
-            heading: prev.heading || 0,
-            speed: 4, // 4 km/h walking speed
-            accuracy: 5 // 5m GPS accuracy
-          }
-        );
-
-        return prev;
-      });
+      lastLivePushRef.current = Date.now();
+      clientCommunicationEngine.sendLocation(
+        user.id,
+        user.battery,
+        user.status,
+        isOnline ? 'LTE/Wi-Fi' : 'Offline local mesh',
+        {
+          lat: loc.lat,
+          lng: loc.lng,
+          heading: loc.heading || 0,
+          speed: 0,
+          accuracy: loc.isReal ? 10 : 50
+        }
+      );
     };
 
     sendPing();
-
-    const heartbeatTimer = setInterval(sendPing, 10000); // 10 seconds interval
+    const heartbeatTimer = setInterval(sendPing, 3000);
 
     return () => clearInterval(heartbeatTimer);
   }, [user, isOnline]);

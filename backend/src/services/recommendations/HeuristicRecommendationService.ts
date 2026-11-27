@@ -19,24 +19,28 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export class HeuristicRecommendationService implements IRecommendationService {
   async getBackupRecommendations(incidentId: string): Promise<BackupRecommendation> {
-    // 1. Fetch incident coordinates and priority
+    // 1. Fetch incident coordinates, district, and priority
     const incident = db.prepare(`
-      SELECT location_lat as lat, location_lng as lng, reporter_id as reporterId, priority
+      SELECT location_lat as lat, location_lng as lng, reporter_id as reporterId, district_id as districtId, priority
       FROM incidents WHERE id = ?
-    `).get(incidentId) as { lat: number | null; lng: number | null; reporterId: string; priority: string } | undefined;
+    `).get(incidentId) as { lat: number | null; lng: number | null; reporterId: string; districtId: string; priority: string } | undefined;
 
     if (!incident || incident.lat === null || incident.lng === null) {
       return { incidentId, recommendedOfficers: [], recommendedTeams: [] };
     }
 
-    const { lat, lng, reporterId } = incident;
+    const { lat, lng, reporterId, districtId } = incident;
 
-    // 2. Fetch all officers who are not Offline and not the reporter
+    // 2. Fetch all officers in the same district who are not Offline and not the reporter
     const officers = db.prepare(`
-      SELECT id, name, status, battery, team_id as teamId, role
+      SELECT id, badge_number as badgeNumber, name, status, battery, team_id as teamId,
+             district_id as districtId, role, last_heartbeat as lastHeartbeat
       FROM users
-      WHERE role = 'officer' AND status NOT IN ('Offline', 'Lost Connection') AND id != ?
-    `).all(reporterId) as User[];
+      WHERE role = 'officer'
+        AND district_id = ?
+        AND status NOT IN ('Offline', 'Lost Connection')
+        AND id != ?
+    `).all(districtId, reporterId) as User[];
 
     const officerDistances: Array<{ officer: User; distance: number }> = [];
 
@@ -84,6 +88,7 @@ export class HeuristicRecommendationService implements IRecommendationService {
         status: officer.status,
         battery: officer.battery,
         teamId: officer.teamId,
+        districtId: officer.districtId,
         lastHeartbeat: officer.lastHeartbeat
       };
 

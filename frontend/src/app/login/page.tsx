@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
-import { Shield, Key, RefreshCw, Smartphone, RadioTower, CheckCircle2, Lock, Settings } from 'lucide-react';
+import { Shield, Key, RefreshCw, Smartphone, RadioTower, CheckCircle2, Lock, Settings, Cloud } from 'lucide-react';
 import { TacticalButton } from '../../components/ui/TacticalButton';
+import { SupabaseStateClient } from '../../services/cloud/SupabaseStateClient';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,16 +18,29 @@ export default function LoginPage() {
   const [isNfcScanning, setIsNfcScanning] = useState<boolean>(false);
   const [scanSuccess, setScanSuccess] = useState<boolean>(false);
   
-  // Server IP custom overrides
+  // Server IP custom overrides & Cloud Mode toggle
   const [showServerIpConfig, setShowServerIpConfig] = useState<boolean>(false);
   const [customIp, setCustomIp] = useState<string>('');
   const [ipSavedMessage, setIpSavedMessage] = useState<string>('');
+  const [connectionMode, setConnectionMode] = useState<'local' | 'cloud'>('local');
+  const [cloudReady, setCloudReady] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setCustomIp(localStorage.getItem('tactical_server_ip') || '');
+      const configured = SupabaseStateClient.isConfigured();
+      setCloudReady(configured);
+      if (configured) {
+        setConnectionMode(SupabaseStateClient.getConnectionMode());
+      }
     }
   }, []);
+
+  const switchMode = (mode: 'local' | 'cloud') => {
+    setConnectionMode(mode);
+    SupabaseStateClient.setConnectionMode(mode);
+    setError(null);
+  };
 
   const saveServerIp = () => {
     if (typeof window !== 'undefined') {
@@ -47,7 +61,9 @@ export default function LoginPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (isAuthenticated && user) {
-      if (user.role === 'dispatcher') {
+      if (user.role === 'state_admin') {
+        router.replace('/admin');
+      } else if (user.role === 'dispatcher') {
         router.replace('/command');
       } else {
         router.replace('/officer');
@@ -95,7 +111,9 @@ export default function LoginPage() {
 
     try {
       const loggedInUser = await login(badgeNumber, pin);
-      if (loggedInUser.role === 'dispatcher') {
+      if (loggedInUser.role === 'state_admin') {
+        router.push('/admin');
+      } else if (loggedInUser.role === 'dispatcher') {
         router.push('/command');
       } else {
         router.push('/officer');
@@ -132,10 +150,22 @@ export default function LoginPage() {
     }, 1500);
   };
 
-  const loadPreset = (presetBadge: string, presetPin: string) => {
+  const loadPreset = async (presetBadge: string, presetPin: string) => {
     setError(null);
     setBadgeNumber(presetBadge);
     setPin(presetPin);
+    try {
+      const loggedInUser = await login(presetBadge, presetPin);
+      if (loggedInUser.role === 'state_admin') {
+        router.push('/admin');
+      } else if (loggedInUser.role === 'dispatcher') {
+        router.push('/command');
+      } else {
+        router.push('/officer');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Preset authentication failed.');
+    }
   };
 
   return (
@@ -182,18 +212,45 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleFormSubmit} className="space-y-4">
-          
+          {cloudReady && (
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => switchMode('local')}
+                className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition ${
+                  connectionMode === 'local' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <RadioTower className="w-3.5 h-3.5" />
+                District Node (:5001)
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode('cloud')}
+                className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition ${
+                  connectionMode === 'cloud' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                State Cloud (Supabase)
+              </button>
+            </div>
+          )}
+
           {/* Inputs Section */}
           <div className="space-y-3">
             <div className="p-3.5 border border-slate-200 bg-slate-50 rounded-2xl focus-within:border-sky-500 focus-within:bg-sky-50 focus-within:shadow-[0_0_15px_rgba(14,165,233,0.1)] transition-all duration-200">
               <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
-                Badge / User ID Code
+                {connectionMode === 'cloud' ? 'State Admin Email' : 'Badge / User ID Code'}
               </label>
               <div className="flex items-center gap-3">
                 <Shield className="w-4 h-4 text-slate-400 focus-within:text-sky-600" />
                 <input
-                  type="text"
-                  placeholder="e.g. p1"
+                  type={connectionMode === 'cloud' ? 'email' : 'text'}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={connectionMode === 'cloud' ? 'admin@herolab.in' : 'e.g. p1'}
                   value={badgeNumber}
                   onChange={(e) => setBadgeNumber(e.target.value)}
                   className="w-full bg-transparent border-none outline-none text-base font-black font-mono text-slate-800 placeholder-slate-400 tracking-wider"
@@ -204,13 +261,13 @@ export default function LoginPage() {
 
             <div className="p-3.5 border border-slate-200 bg-slate-50 rounded-2xl focus-within:border-sky-500 focus-within:bg-sky-50 focus-within:shadow-[0_0_15px_rgba(14,165,233,0.1)] transition-all duration-200">
               <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
-                Secure Passcode PIN
+                {connectionMode === 'cloud' ? 'Supabase Password' : 'Secure Passcode PIN'}
               </label>
               <div className="flex items-center gap-3">
                 <Key className="w-4 h-4 text-slate-400 focus-within:text-sky-600" />
                 <input
                   type="password"
-                  placeholder="e.g. police"
+                  placeholder={connectionMode === 'cloud' ? '••••••••' : 'e.g. police'}
                   value={pin}
                   onChange={(e) => setPin(e.target.value)}
                   className="w-full bg-transparent border-none outline-none text-base font-black font-mono text-slate-800 placeholder-slate-400 tracking-wider"
@@ -247,41 +304,46 @@ export default function LoginPage() {
               )}
             </TacticalButton>
 
-            <button
-              type="button"
-              onClick={triggerNfcSimulation}
-              className="w-full text-[11px] font-extrabold text-slate-500 hover:text-slate-700 py-2.5 border border-slate-200 hover:border-slate-300 bg-slate-50 active:scale-98 transition rounded-2xl flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              disabled={isLoading || isNfcScanning}
-            >
-              <Smartphone className={`w-3.5 h-3.5 ${isNfcScanning ? 'text-sky-400 animate-bounce' : 'text-slate-500'}`} />
-              <span>{isNfcScanning ? 'SCANNING CONTACTLESS BADGE...' : 'SIMULATE BADGE SCAN'}</span>
-            </button>
+            {connectionMode === 'local' && (
+              <button
+                type="button"
+                onClick={triggerNfcSimulation}
+                className="w-full text-[11px] font-extrabold text-slate-500 hover:text-slate-700 py-2.5 border border-slate-200 hover:border-slate-300 bg-slate-50 active:scale-98 transition rounded-2xl flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                disabled={isLoading || isNfcScanning}
+              >
+                <Smartphone className={`w-3.5 h-3.5 ${isNfcScanning ? 'text-sky-400 animate-bounce' : 'text-slate-500'}`} />
+                <span>{isNfcScanning ? 'SCANNING CONTACTLESS BADGE...' : 'SIMULATE BADGE SCAN'}</span>
+              </button>
+            )}
           </div>
 
-          {/* Preset Bypass Presets */}
-          <div className="pt-4 border-t border-slate-200 flex flex-col gap-2">
-            <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider text-center">
-              SYSTEM BYPASS PRESETS
-            </span>
-            <div className="flex gap-2.5">
-              <button
-                type="button"
-                onClick={() => loadPreset('admin', 'police')}
-                className="flex-1 font-sans text-[9px] py-2 border border-slate-200 hover:border-sky-300 bg-slate-50 hover:bg-sky-50 text-slate-500 hover:text-sky-600 rounded-xl font-bold transition cursor-pointer text-center shadow-sm"
-              >
-                COMMAND CENTER (admin)
-              </button>
-              <button
-                type="button"
-                onClick={() => loadPreset('p1', 'police')}
-                className="flex-1 font-sans text-[9px] py-2 border border-slate-200 hover:border-emerald-300 bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 rounded-xl font-bold transition cursor-pointer text-center shadow-sm"
-              >
-                POLICE OFFICER (p1)
-              </button>
+          {/* Preset Bypass Presets (Local District Node only) */}
+          {connectionMode === 'local' && (
+            <div className="pt-4 border-t border-slate-200 flex flex-col gap-2">
+              <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider text-center">
+                SYSTEM BYPASS PRESETS
+              </span>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => loadPreset('state_admin', 'police')}
+                  className="font-sans text-[9px] py-2 border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-700 rounded-xl font-bold transition cursor-pointer text-center shadow-sm"
+                >
+                  STATE ADMIN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => loadPreset('admin', 'police')}
+                  className="font-sans text-[9px] py-2 border border-slate-200 hover:border-sky-300 bg-slate-50 hover:bg-sky-50 text-slate-500 hover:text-sky-600 rounded-xl font-bold transition cursor-pointer text-center shadow-sm"
+                >
+                  DISTRICT HQ
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Server Connection settings section */}
+          {/* Server Connection settings section (Local mode only) */}
+          {connectionMode === 'local' && (
           <div className="pt-3 border-t border-slate-250 flex flex-col gap-1.5">
             <button
               type="button"
@@ -331,6 +393,7 @@ export default function LoginPage() {
               </div>
             )}
           </div>
+          )}
 
         </form>
       </div>

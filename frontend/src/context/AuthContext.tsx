@@ -5,6 +5,7 @@ import { User } from '../types';
 import { SocketTransportProvider } from '../services/communication/SocketTransportProvider';
 import { clientCommunicationEngine } from '../services/communication/CommunicationEngine';
 import { clientEventBus } from '../services/events/EventBus';
+import { SupabaseStateClient } from '../services/cloud/SupabaseStateClient';
 
 const getBackendUrl = () => {
   if (typeof window !== 'undefined') {
@@ -21,6 +22,7 @@ const getBackendUrl = () => {
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  authMode: 'local' | 'cloud';
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (badgeNumber: string, pin: string) => Promise<User>;
@@ -36,6 +38,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<'local' | 'cloud'>('local');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isForcedOffline, setIsForcedOffline] = useState<boolean>(false);
   const [transportProvider, setTransportProvider] = useState<SocketTransportProvider | null>(null);
@@ -45,23 +48,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const savedToken = typeof window !== 'undefined' ? localStorage.getItem('tactical_token') : null;
       const savedUser = typeof window !== 'undefined' ? localStorage.getItem('tactical_user') : null;
+      const savedMode = typeof window !== 'undefined' ? (localStorage.getItem('hero_auth_mode') as 'local' | 'cloud' | null) : null;
 
       if (savedToken && savedUser) {
         try {
           const parsedUser = JSON.parse(savedUser) as User;
+          const resolvedMode = savedMode || 'local';
           setToken(savedToken);
           setUser(parsedUser);
-          
-          // Initialize Socket Transport
-          const transport = new SocketTransportProvider();
-          transport.connect(parsedUser.id, parsedUser.role, parsedUser.teamId);
-          clientCommunicationEngine.setTransport(transport);
-          setTransportProvider(transport);
+          setAuthMode(resolvedMode);
+
+          if (resolvedMode === 'local') {
+            const transport = new SocketTransportProvider();
+            transport.connect(parsedUser.id, parsedUser.role, parsedUser.teamId, savedToken);
+            clientCommunicationEngine.setTransport(transport);
+            setTransportProvider(transport);
+          }
         } catch (err) {
           console.error('Failed to parse cached session:', err);
           try {
             localStorage.removeItem('tactical_token');
             localStorage.removeItem('tactical_user');
+            localStorage.removeItem('hero_auth_mode');
           } catch (_) {}
         }
       }
@@ -75,6 +83,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (badgeNumber: string, pin: string): Promise<User> => {
     setIsLoading(true);
     try {
+      const useCloud =
+        SupabaseStateClient.isConfigured() &&
+        (SupabaseStateClient.getConnectionMode() === 'cloud' || badgeNumber.includes('@'));
+
+      if (useCloud) {
+        const { token: receivedToken, user: receivedUser } = await SupabaseStateClient.signInWithEmail(badgeNumber, pin);
+        try {
+          localStorage.setItem('tactical_token', receivedToken);
+          localStorage.setItem('tactical_user', JSON.stringify(receivedUser));
+          localStorage.setItem('hero_auth_mode', 'cloud');
+        } catch (e) {
+          console.warn('LocalStorage write denied:', e);
+        }
+        setToken(receivedToken);
+        setUser(receivedUser);
+        setAuthMode('cloud');
+        return receivedUser;
+      }
+
       const response = await fetch(`${getBackendUrl()}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,22 +118,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         localStorage.setItem('tactical_token', receivedToken);
         localStorage.setItem('tactical_user', JSON.stringify(receivedUser));
+        localStorage.setItem('hero_auth_mode', 'local');
       } catch (e) {
         console.warn('LocalStorage write denied in this browser context:', e);
       }
 
       setToken(receivedToken);
       setUser(receivedUser);
+      setAuthMode('local');
 
       // Connect Sockets
       const transport = new SocketTransportProvider();
-      transport.connect(receivedUser.id, receivedUser.role, receivedUser.teamId);
+      transport.connect(receivedUser.id, receivedUser.role, receivedUser.teamId, receivedToken);
       clientCommunicationEngine.setTransport(transport);
       setTransportProvider(transport);
 
       return receivedUser;
     } catch (err) {
-      console.error('Login action failed:', err);
+      console.warn('Login action failed:', err);
       throw err;
     } finally {
       setIsLoading(false);
@@ -116,17 +145,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async (): Promise<void> => {
     setIsLoading(true);
     try {
-      if (token) {
+      if (token && authMode === 'local') {
         await fetch(`${getBackendUrl()}/api/auth/logout`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           }
-        }).catch(err => console.log('Offline logout fallback active.'));
+        }).catch(() => console.log('Offline logout fallback active.'));
       }
     } finally {
-      // Disconnect Sockets
       if (transportProvider) {
         transportProvider.disconnect();
         setTransportProvider(null);
@@ -135,11 +163,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         localStorage.removeItem('tactical_token');
         localStorage.removeItem('tactical_user');
+        localStorage.removeItem('hero_auth_mode');
       } catch (e) {
         console.warn('LocalStorage clear blocked in this browser context:', e);
       }
       setToken(null);
       setUser(null);
+      setAuthMode('local');
       setIsLoading(false);
     }
   };
@@ -156,7 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       if (user) {
         const transport = new SocketTransportProvider();
-        transport.connect(user.id, user.role, user.teamId);
+        transport.connect(user.id, user.role, user.teamId, token);
         clientCommunicationEngine.setTransport(transport);
         setTransportProvider(transport);
         console.log('[AuthContext] Ending simulated drop: Reconnecting sockets.');
@@ -194,6 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{
       user,
       token,
+      authMode,
       isAuthenticated: !!token && !!user,
       isLoading,
       login,

@@ -13,6 +13,8 @@ export default function Home() {
 
     if (!isAuthenticated) {
       router.replace('/login');
+    } else if (user?.role === 'state_admin') {
+      router.replace('/admin');
     } else if (user?.role === 'dispatcher') {
       router.replace('/command');
     } else {

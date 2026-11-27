@@ -9,6 +9,7 @@ interface RealLeafletMapProps {
   officers?: User[];
   incidents?: Incident[];
   currentOfficerLocation?: { lat: number; lng: number; heading: number; isReal?: boolean } | null;
+  districtCenter?: { lat: number; lng: number } | null;
   onDispatchOfficer?: (officerId: string, incidentId: string) => void;
   selectedIncidentId?: string | null;
   onSelectIncident?: (incidentId: string | null) => void;
@@ -19,6 +20,7 @@ export default function RealLeafletMap({
   officers = [],
   incidents = [],
   currentOfficerLocation = null,
+  districtCenter = null,
   onDispatchOfficer,
   selectedIncidentId = null,
   onSelectIncident,
@@ -48,18 +50,42 @@ export default function RealLeafletMap({
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    // Center of Visakhapatnam Area
-    const centerLat = 17.8167;
-    const centerLng = 83.3426;
+    // Center on provided districtCenter or default Visakhapatnam Area
+    const centerLat = districtCenter?.lat ?? 17.6868;
+    const centerLng = districtCenter?.lng ?? 83.2185;
 
     const map = L.map(mapContainerRef.current, {
       zoomControl: true,
       attributionControl: false
     }).setView([centerLat, centerLng], 14);
 
-    // CartoDB Voyager tiles (premium light theme)
+    // Offline tactical grid layer underneath online tiles so map remains legible with zero internet
+    const OfflineGridLayer = L.GridLayer.extend({
+      createTile: function (coords: L.Coords) {
+        const tile = document.createElement('canvas');
+        const size = this.getTileSize();
+        tile.width = size.x;
+        tile.height = size.y;
+        const ctx = tile.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#F1F5F9';
+          ctx.fillRect(0, 0, size.x, size.y);
+          ctx.strokeStyle = 'rgba(2, 132, 199, 0.12)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(0, 0, size.x, size.y);
+          ctx.fillStyle = 'rgba(100, 116, 139, 0.35)';
+          ctx.font = '10px monospace';
+          ctx.fillText(`Z${coords.z} (${coords.x},${coords.y})`, 8, 16);
+        }
+        return tile;
+      }
+    });
+    new (OfflineGridLayer as any)({ zIndex: 0 }).addTo(map);
+
+    // CartoDB Voyager tiles (loads when internet is available)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       maxZoom: 20,
+      zIndex: 1,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
     }).addTo(map);
 
@@ -112,6 +138,24 @@ export default function RealLeafletMap({
     };
   }, []);
 
+  // Fly to district center when switching districts
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !districtCenter) return;
+    map.setView([districtCenter.lat, districtCenter.lng], 13);
+    hasCenteredRef.current = false;
+  }, [districtCenter?.lat, districtCenter?.lng]);
+
+  // Focus map when an incident (e.g. incoming SOS) is selected
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedIncidentId) return;
+    const inc = incidents.find(i => i.id === selectedIncidentId);
+    if (inc?.locationLat != null && inc?.locationLng != null) {
+      map.flyTo([inc.locationLat, inc.locationLng], 15, { duration: 0.6 });
+    }
+  }, [selectedIncidentId]);
+
   // Auto center or auto-fit bounds on active entities
   useEffect(() => {
     const map = mapRef.current;
@@ -159,11 +203,14 @@ export default function RealLeafletMap({
     // Clear previous dynamic markers
     markerGroup.clearLayers();
 
+    const fallbackLat = districtCenter?.lat ?? 17.6868;
+    const fallbackLng = districtCenter?.lng ?? 83.2185;
+
     // 1. Draw Active Incidents
     incidents.forEach(inc => {
       const indexSeed = parseInt(inc.id.replace(/\D/g, '')) || 0;
-      const incLat = inc.locationLat || (inc.reporterId === 'p3' ? 17.8100 : (17.8167 + (indexSeed % 5) * 0.009 - 0.02));
-      const incLng = inc.locationLng || (inc.reporterId === 'p3' ? 83.3400 : (83.3426 + (indexSeed % 7) * 0.007 - 0.02));
+      const incLat = inc.locationLat ?? (fallbackLat + (indexSeed % 5) * 0.004 - 0.008);
+      const incLng = inc.locationLng ?? (fallbackLng + (indexSeed % 7) * 0.004 - 0.01);
 
       const isP1 = inc.priority === 'P1';
 
@@ -193,8 +240,8 @@ export default function RealLeafletMap({
     // 2. Draw Deployed Officers
     officers.forEach(off => {
       const seed = parseInt(off.badgeNumber.replace(/\D/g, '')) || 1;
-      const offLat = off.location?.latitude || (off as any).lat || (17.8200 + (seed % 4) * 0.009 - 0.015);
-      const offLng = off.location?.longitude || (off as any).lng || (83.3400 + (seed % 6) * 0.009 - 0.025);
+      const offLat = off.location?.latitude ?? (off as any).lat ?? (fallbackLat + (seed % 4) * 0.004 - 0.006);
+      const offLng = off.location?.longitude ?? (off as any).lng ?? (fallbackLng + (seed % 6) * 0.004 - 0.008);
 
       const isOnline = off.status !== 'Offline';
       const isEmergency = off.status === 'Emergency';
@@ -397,21 +444,50 @@ export default function RealLeafletMap({
       {/* Map DOM anchor node */}
       <div ref={mapContainerRef} className="flex-1 w-full h-full bg-slate-100 z-0" />
 
-      {/* Recenter GPS Button */}
-      {currentOfficerLocation && (
-        <button
-          onClick={() => {
-            if (mapRef.current) {
-              mapRef.current.setView([currentOfficerLocation.lat, currentOfficerLocation.lng], 14);
-            }
-          }}
-          className="absolute top-4 right-4 z-[1000] p-2 bg-white/95 hover:bg-slate-50 border border-slate-200 text-slate-800 rounded-xl shadow-lg active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5 text-[10px] font-extrabold uppercase font-sans tracking-wide"
-          title="Recenter Map on My Location"
-        >
-          <MapPin className="w-3.5 h-3.5 text-sky-600 animate-pulse" />
-          <span>My Location</span>
-        </button>
-      )}
+      {/* Recenter / Fit All Controls */}
+      <div className="absolute top-4 right-4 z-[1000] flex items-center gap-2">
+        {isCommandCenter && (
+          <button
+            onClick={() => {
+              const map = mapRef.current;
+              if (!map) return;
+              const pts: L.LatLngExpression[] = [];
+              officers.forEach(off => {
+                if (off.location?.latitude != null && off.location?.longitude != null) {
+                  pts.push([off.location.latitude, off.location.longitude]);
+                }
+              });
+              incidents.forEach(inc => {
+                if (inc.locationLat != null && inc.locationLng != null) {
+                  pts.push([inc.locationLat, inc.locationLng]);
+                }
+              });
+              if (pts.length === 1) map.setView(pts[0], 15);
+              else if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 15 });
+              else if (districtCenter) map.setView([districtCenter.lat, districtCenter.lng], 13);
+            }}
+            className="p-2 bg-white/95 hover:bg-slate-50 border border-slate-200 text-slate-800 rounded-xl shadow-lg active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5 text-[10px] font-extrabold uppercase font-sans tracking-wide"
+            title="Fit All Active Units & Incidents"
+          >
+            <RadioTower className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Fit Units</span>
+          </button>
+        )}
+        {currentOfficerLocation && (
+          <button
+            onClick={() => {
+              if (mapRef.current) {
+                mapRef.current.setView([currentOfficerLocation.lat, currentOfficerLocation.lng], 15);
+              }
+            }}
+            className="p-2 bg-white/95 hover:bg-slate-50 border border-slate-200 text-slate-800 rounded-xl shadow-lg active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5 text-[10px] font-extrabold uppercase font-sans tracking-wide"
+            title="Recenter Map on My Location"
+          >
+            <MapPin className="w-3.5 h-3.5 text-sky-600 animate-pulse" />
+            <span>My Location</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

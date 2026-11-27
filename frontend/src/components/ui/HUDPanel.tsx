@@ -4,6 +4,7 @@ interface HUDPanelProps {
   title: string;
   subtitle?: string;
   headerRight?: React.ReactNode;
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
   statusColor?: 'cyan' | 'green' | 'amber' | 'red' | 'gray';
   className?: string;
@@ -13,6 +14,7 @@ export const HUDPanel: React.FC<HUDPanelProps> = ({
   title,
   subtitle,
   headerRight,
+  headerAction,
   children,
   statusColor = 'cyan',
   className = ''
@@ -58,7 +60,7 @@ export const HUDPanel: React.FC<HUDPanelProps> = ({
             )}
           </div>
         </div>
-        {headerRight && <div className="text-xs text-slate-500">{headerRight}</div>}
+        {(headerAction || headerRight) && <div className="text-xs text-slate-500">{headerAction || headerRight}</div>}
       </div>
 
       {/* Panel contents */}

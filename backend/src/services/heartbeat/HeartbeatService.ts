@@ -67,21 +67,20 @@ export class HeartbeatService {
     }
   }
 
-  static checkTimeouts(): Array<{ id: string; name: string; status: string }> {
+  static checkTimeouts(): Array<{ id: string; name: string; status: string; districtId: string }> {
     try {
       const now = Date.now();
       const timeoutThreshold = 30000; // 30 seconds
 
-      // Find users whose status is active (not Offline and not already Lost Connection) but haven't beat in >30s
       const activeOfficers = db.prepare(`
-        SELECT id, name, status, last_heartbeat as lastHeartbeat
+        SELECT id, name, status, district_id as districtId, last_heartbeat as lastHeartbeat
         FROM users
         WHERE role = 'officer' 
           AND status NOT IN ('Offline', 'Lost Connection')
           AND (last_heartbeat IS NULL OR (? - last_heartbeat) > ?)
-      `).all(now, timeoutThreshold) as Array<{ id: string; name: string; status: string; lastHeartbeat: number | null }>;
+      `).all(now, timeoutThreshold) as Array<{ id: string; name: string; status: string; districtId: string; lastHeartbeat: number | null }>;
 
-      const updatedOfficers: Array<{ id: string; name: string; status: string }> = [];
+      const updatedOfficers: Array<{ id: string; name: string; status: string; districtId: string }> = [];
 
       const updateStatus = db.prepare(`
         UPDATE users
@@ -93,12 +92,15 @@ export class HeartbeatService {
         updateStatus.run(officer.id);
         AuditService.log(
           officer.id, 
-          `Status changed to Lost Connection: No heartbeat received for ${Math.round((now - (officer.lastHeartbeat ?? 0)) / 1000)} seconds`
+          `Status changed to Lost Connection: No heartbeat received for ${Math.round((now - (officer.lastHeartbeat ?? 0)) / 1000)} seconds`,
+          null,
+          officer.districtId
         );
         updatedOfficers.push({
           id: officer.id,
           name: officer.name,
-          status: 'Lost Connection'
+          status: 'Lost Connection',
+          districtId: officer.districtId
         });
       }
 

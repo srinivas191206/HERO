@@ -35,17 +35,26 @@ export class PriorityEngine {
     dedupKey?: string
   ): Promise<number> {
     try {
-      // Duplicate prevention: If a matching pending payload exists, skip insertion
+      // Duplicate prevention: coalesce pending GPS updates and skip duplicate messages
       if (dedupKey) {
         const existing = await localDb.outboundQueue
           .where('status')
           .equals('pending')
           .toArray();
-        
-        const isDuplicate = existing.some((item: any) => {
-          if (type === 'gps' && item.type === 'gps') {
-            return item.payload.timestamp === payload.timestamp;
+
+        if (type === 'gps') {
+          const existingGps = existing.find((item: any) => item.type === 'gps' && item.payload?.userId === payload?.userId);
+          if (existingGps?.id) {
+            await localDb.outboundQueue.update(existingGps.id, {
+              payload,
+              timestamp: Date.now()
+            });
+            this.triggerProcess();
+            return existingGps.id;
           }
+        }
+
+        const isDuplicate = existing.some((item: any) => {
           if (type === 'message' && item.type === 'message') {
             return item.payload.id === payload.id;
           }

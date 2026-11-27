@@ -9,6 +9,7 @@
     "start": "next start -p 3005",
     "lint": "eslint",
     "electron:start": "electron .",
+    "electron:offline": "npm run build && electron .",
     "electron:package": "electron-packager . EluruPoliceCommandCenter --platform=darwin --arch=x64 --out=dist/ --overwrite --ignore=\"(dist|\\\\.next/cache|android|\\\\.git)\" --extend-info=mac-info.plist"
   },
   "dependencies": {

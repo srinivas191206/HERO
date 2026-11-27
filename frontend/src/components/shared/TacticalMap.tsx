@@ -9,6 +9,7 @@ interface TacticalMapProps {
   officers?: User[];
   incidents?: Incident[];
   currentOfficerLocation?: { lat: number; lng: number; heading: number; isReal?: boolean } | null;
+  districtCenter?: { lat: number; lng: number } | null;
   onDispatchOfficer?: (officerId: string, incidentId: string) => void;
   selectedIncidentId?: string | null;
   onSelectIncident?: (incidentId: string | null) => void;
