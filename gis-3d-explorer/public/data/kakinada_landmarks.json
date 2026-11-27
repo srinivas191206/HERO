@@ -1,0 +1,86 @@
+[
+  {
+    "name": "JNTU Kakinada (JNTUK)",
+    "category": "Education / Campus",
+    "latitude": 16.9785,
+    "longitude": 82.2415,
+    "description": "Jawaharlal Nehru Technological University campus, established in 1946. Core academic and technical landmark in Kakinada."
+  },
+  {
+    "name": "Kakinada Deep Water Port",
+    "category": "Maritime / Infrastructure",
+    "latitude": 16.984,
+    "longitude": 82.278,
+    "description": "All-weather deep water port on the Coromandel coast, handling petroleum, fertilizers, and agricultural export."
+  },
+  {
+    "name": "Kakinada Beach & NTR Beach Promenade",
+    "category": "Coastal / Tourism",
+    "latitude": 17.0012,
+    "longitude": 82.261,
+    "description": "Scenic shoreline on the Bay of Bengal, tourist promenade and beach park in Kakinada."
+  },
+  {
+    "name": "Jagannaickpur",
+    "category": "Neighborhood / Historical",
+    "latitude": 16.945,
+    "longitude": 82.238,
+    "description": "Southern historical district of Kakinada situated across Salt Creek with rich commercial heritage."
+  },
+  {
+    "name": "Bhanugudi Junction",
+    "category": "Urban / Road Junction",
+    "latitude": 16.9805,
+    "longitude": 82.2382,
+    "description": "Major commercial hub and junction connecting Main Road, Cinema Road and JNTU arterial roads."
+  },
+  {
+    "name": "Kakinada Collectorate & District Headquarters",
+    "category": "Government / Administrative",
+    "latitude": 16.9891,
+    "longitude": 82.2475,
+    "description": "Kakinada District Collectorate and administrative headquarters of Kakinada District."
+  },
+  {
+    "name": "Kakinada Town Railway Station",
+    "category": "Transport",
+    "latitude": 16.9535,
+    "longitude": 82.2335,
+    "description": "Primary South Coast Railway terminal connecting Kakinada with national rail corridors."
+  },
+  {
+    "name": "Kakinada Boat Club Lake",
+    "category": "Water Body / Recreation",
+    "latitude": 16.9752,
+    "longitude": 82.235,
+    "description": "Centrally located inland freshwater lake and recreational park in Kakinada."
+  },
+  {
+    "name": "Coringa Mangroves & Wildlife Sanctuary",
+    "category": "Ecological / Estuary",
+    "latitude": 16.892,
+    "longitude": 82.298,
+    "description": "Second largest mangrove formation in India, situated in Godavari estuary south of Kakinada."
+  },
+  {
+    "name": "Hope Island Sand Spit",
+    "category": "Geographic / Coastal Barrier",
+    "latitude": 16.965,
+    "longitude": 82.342,
+    "description": "Natural 16-km long tadpole-shaped sand spit forming a tranquil natural harbor for Kakinada Bay."
+  },
+  {
+    "name": "Suryaraopeta Commercial Quarter",
+    "category": "Commercial / Residential",
+    "latitude": 16.985,
+    "longitude": 82.242,
+    "description": "Dense commercial and residential quarter in central Kakinada."
+  },
+  {
+    "name": "Cinema Road Commercial Corridor",
+    "category": "Commercial / Market",
+    "latitude": 16.968,
+    "longitude": 82.236,
+    "description": "High-density retail, shopping complexes, and financial establishments corridor."
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "name": "Cotton Bhavan (Admin Headquarters)",
+    "category": "Administration / Central Office",
+    "latitude": 17.08799,
+    "longitude": 82.06686,
+    "description": "Main administrative facade, Principal's office, Chairman chambers & centralized reception."
+  },
+  {
+    "name": "Newton Bhavan (Engineering Block)",
+    "category": "Academic / Engineering Labs",
+    "latitude": 17.09362,
+    "longitude": 82.0667,
+    "description": "Multi-storey engineering block housing advanced departmental computer labs and lecture theatres."
+  },
+  {
+    "name": "James Watt Bhavan (Mechanical Block)",
+    "category": "Academic / Mechanical & Robotics",
+    "latitude": 17.09318,
+    "longitude": 82.06616,
+    "description": "Mechanical engineering department, thermal labs, robotics & manufacturing workshops."
+  },
+  {
+    "name": "Ramanujan Bhavan (Science & Basic Engineering)",
+    "category": "Academic / First Year Wing",
+    "latitude": 17.09314,
+    "longitude": 82.06662,
+    "description": "Mathematics, physics, chemistry labs and first-year undergraduate lecture halls."
+  },
+  {
+    "name": "K.L. Rao Bhavan (Civil Engineering)",
+    "category": "Academic / Civil & Infrastructure",
+    "latitude": 17.08829,
+    "longitude": 82.06627,
+    "description": "Civil engineering block, soil mechanics labs, concrete tech & CAD drafting studios."
+  },
+  {
+    "name": "Ratan Tata Bhavan (Electrical & Computing)",
+    "category": "Academic / Electrical & IT",
+    "latitude": 17.08782,
+    "longitude": 82.06632,
+    "description": "Electrical, electronics, embedded systems, and artificial intelligence incubation labs."
+  },
+  {
+    "name": "Aditya Engineering College (AEC Main Block)",
+    "category": "Academic Complex",
+    "latitude": 17.0898,
+    "longitude": 82.06675,
+    "description": "Central collegiate academic building established in 2001, premier autonomous institute."
+  },
+  {
+    "name": "Technical Hub (T-Hub Innovation Centre)",
+    "category": "Innovation & Training",
+    "latitude": 17.091,
+    "longitude": 82.0678,
+    "description": "Flagship skill development and corporate incubation center driving real-world tech certifications."
+  },
+  {
+    "name": "A Block & B Block Complex",
+    "category": "Academic Classrooms",
+    "latitude": 17.09174,
+    "longitude": 82.06915,
+    "description": "Modern smart classrooms, tutorial rooms and department faculty chambers."
+  },
+  {
+    "name": "C Block, D Block & E Block",
+    "category": "Academic & Auditorium",
+    "latitude": 17.09252,
+    "longitude": 82.0691,
+    "description": "Conference halls, state-of-the-art multimedia auditoriums and specialized seminar venues."
+  },
+  {
+    "name": "Girls Hostel Residence",
+    "category": "Residential Quarters",
+    "latitude": 17.09168,
+    "longitude": 82.06821,
+    "description": "Secure on-campus student residential hostel with dining hall and study pavilions."
+  },
+  {
+    "name": "Aditya Sports Arena & Basketball Ground",
+    "category": "Sports & Recreation",
+    "latitude": 17.089,
+    "longitude": 82.06793,
+    "description": "Floodlit championship basketball courts, volleyball courts and athletics pavilion."
+  },
+  {
+    "name": "College Central Park & Gardens",
+    "category": "Landscape & Open Spaces",
+    "latitude": 17.09294,
+    "longitude": 82.06797,
+    "description": "Landscaped botanical park, green lawns and central fountain meeting spot."
+  },
+  {
+    "name": "Kakinada & Rajahmundry Bus Fleet Hub",
+    "category": "Transportation Terminal",
+    "latitude": 17.0894,
+    "longitude": 82.0691,
+    "description": "Transit logistics hub operating over 250 buses across Godavari coastal districts."
+  }
+]

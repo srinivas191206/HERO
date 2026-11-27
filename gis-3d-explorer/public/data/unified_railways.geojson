@@ -1,0 +1,84 @@
+{
+  "type": "FeatureCollection",
+  "name": "South_Coast_Railway_Network",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "rail-howrah-chennai-mainline",
+      "properties": {
+        "name": "Howrah - Chennai Main Railway Line (South Coast Railway)",
+        "type": "mainline",
+        "gauge": "broad",
+        "electrified": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            82.115,
+            17.13
+          ],
+          [
+            82.145,
+            17.09
+          ],
+          [
+            82.1695,
+            17.052
+          ],
+          [
+            82.195,
+            17.01
+          ],
+          [
+            82.215,
+            16.96
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "rail-samalkot-kakinada-branch",
+      "properties": {
+        "name": "Samalkot - Kakinada Port Railway Branch Corridor",
+        "type": "branchline",
+        "gauge": "broad",
+        "electrified": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            82.1695,
+            17.052
+          ],
+          [
+            82.188,
+            17.025
+          ],
+          [
+            82.208,
+            16.998
+          ],
+          [
+            82.222,
+            16.975
+          ],
+          [
+            82.2335,
+            16.9535
+          ],
+          [
+            82.251,
+            16.968
+          ],
+          [
+            82.268,
+            16.9845
+          ]
+        ]
+      }
+    }
+  ]
+}

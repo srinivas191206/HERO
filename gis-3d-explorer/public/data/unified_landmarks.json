@@ -1,0 +1,226 @@
+[
+  {
+    "name": "Cotton Bhavan (Admin Headquarters)",
+    "category": "Aditya University / Administration",
+    "latitude": 17.08799,
+    "longitude": 82.06686,
+    "description": "Central administrative headquarters, Chairman Chambers & Principal Directorate."
+  },
+  {
+    "name": "Hanuman Temple (Campus Temple)",
+    "category": "Aditya University / Spiritual",
+    "latitude": 17.08745,
+    "longitude": 82.06738,
+    "description": "Campus Sri Hanuman Temple along the main entrance boulevard."
+  },
+  {
+    "name": "Technical Hub (T-Hub)",
+    "category": "Aditya University / Innovation",
+    "latitude": 17.08725,
+    "longitude": 82.0688,
+    "description": "Premier skill development, AI incubator & corporate technology certification hub."
+  },
+  {
+    "name": "Petroleum Technology Building (AEC)",
+    "category": "Aditya University / Engineering",
+    "latitude": 17.0898,
+    "longitude": 82.06675,
+    "description": "Department of Petroleum Technology, Petrochemical labs & drilling rigs."
+  },
+  {
+    "name": "Aditya University Administrative Tower",
+    "category": "Aditya University / Academic Directorate",
+    "latitude": 17.09089,
+    "longitude": 82.0674,
+    "description": "Central collegiate tower & Vice-Chancellor academic senate."
+  },
+  {
+    "name": "Aditya Polytechnic Colleges Block",
+    "category": "Aditya University / Technical Education",
+    "latitude": 17.09065,
+    "longitude": 82.071,
+    "description": "Diploma in Engineering, mechanical workshops & drafting labs."
+  },
+  {
+    "name": "Aditya College of Pharmacy Block",
+    "category": "Aditya University / Pharmacy & Health",
+    "latitude": 17.0899,
+    "longitude": 82.0728,
+    "description": "Faculty of Pharmaceutical Sciences, Pharmacology & medicinal chemistry."
+  },
+  {
+    "name": "MANGO PARK Block, ACET",
+    "category": "Aditya University / ACET",
+    "latitude": 17.09195,
+    "longitude": 82.0695,
+    "description": "Aditya College of Engineering & Technology (ACET) campus block."
+  },
+  {
+    "name": "Newton Bhavan (Core Engineering)",
+    "category": "Aditya University / Engineering Labs",
+    "latitude": 17.09362,
+    "longitude": 82.0667,
+    "description": "Computer Science, AI & core engineering laboratory blocks."
+  },
+  {
+    "name": "James Watt Bhavan (Mechanical Block)",
+    "category": "Aditya University / Mechanical & Automation",
+    "latitude": 17.09318,
+    "longitude": 82.06616,
+    "description": "Thermal engineering, CAD/CAM, robotics & machine tool workshops."
+  },
+  {
+    "name": "Ramanujan Bhavan (Basic Sciences)",
+    "category": "Aditya University / Sciences",
+    "latitude": 17.09314,
+    "longitude": 82.06662,
+    "description": "Mathematics, physics, chemistry labs and first-year undergraduate lecture halls."
+  },
+  {
+    "name": "K.L. Rao Bhavan (Civil Engineering)",
+    "category": "Aditya University / Civil",
+    "latitude": 17.08829,
+    "longitude": 82.06627,
+    "description": "Civil engineering block, soil mechanics labs & structural test facility."
+  },
+  {
+    "name": "Ratan Tata Bhavan (Electrical & IT)",
+    "category": "Aditya University / Electrical & Computing",
+    "latitude": 17.08782,
+    "longitude": 82.06632,
+    "description": "Electrical, electronics, microprocessors and AI incubator."
+  },
+  {
+    "name": "Polavaram Project Model Pavilion",
+    "category": "Aditya University / Landmark",
+    "latitude": 17.0952,
+    "longitude": 82.0658,
+    "description": "Full-scale working hydraulic simulation model of the Polavaram Dam project."
+  },
+  {
+    "name": "Aditya Bridge Promenade",
+    "category": "Aditya University / Landmark",
+    "latitude": 17.0955,
+    "longitude": 82.0694,
+    "description": "Scenic bridge overpass crossing the campus lake."
+  },
+  {
+    "name": "Girls Hostel Residence",
+    "category": "Aditya University / Residential",
+    "latitude": 17.09168,
+    "longitude": 82.06821,
+    "description": "Secure on-campus student residential hostel with dining hall."
+  },
+  {
+    "name": "Aditya Campus Health Center & Hospital",
+    "category": "Healthcare / Surampalem",
+    "latitude": 17.0885,
+    "longitude": 82.068,
+    "description": "24/7 campus hospital, emergency pharmacy & resident doctor clinic."
+  },
+  {
+    "name": "Samalkot Junction Railway Station (SLO)",
+    "category": "Railways / Major Junction",
+    "latitude": 17.052,
+    "longitude": 82.1695,
+    "description": "Key junction station on Howrah-Chennai mainline connecting Surampalem & Kakinada."
+  },
+  {
+    "name": "Kakinada Town Railway Station (CCT)",
+    "category": "Railways / Terminal",
+    "latitude": 16.9535,
+    "longitude": 82.2335,
+    "description": "Primary passenger railway terminal in downtown Kakinada."
+  },
+  {
+    "name": "Kakinada Port Railway Station (COA)",
+    "category": "Railways / Harbor Terminal",
+    "latitude": 16.9845,
+    "longitude": 82.268,
+    "description": "Deep water port rail terminus handling passenger expresses and freight."
+  },
+  {
+    "name": "Peddapuram Railway Station",
+    "category": "Railways / Local Station",
+    "latitude": 17.078,
+    "longitude": 82.138,
+    "description": "Local railway station serving Peddapuram and surrounding towns."
+  },
+  {
+    "name": "Kakinada APSRTC Central Bus Station (RTC Complex)",
+    "category": "Bus Terminal / State Transport",
+    "latitude": 16.961,
+    "longitude": 82.2385,
+    "description": "Interstate APSRTC bus terminus connecting all major cities across AP & Telangana."
+  },
+  {
+    "name": "Aditya Campus Bus Fleet Hub",
+    "category": "Bus Terminal / Campus Transit",
+    "latitude": 17.0894,
+    "longitude": 82.0691,
+    "description": "Massive institutional bus terminus parking and dispatching 250+ student buses daily."
+  },
+  {
+    "name": "Samalkot Bus Stand",
+    "category": "Bus Terminal / Regional",
+    "latitude": 17.054,
+    "longitude": 82.166,
+    "description": "Regional transit hub connecting to Kakinada, Surampalem and Rajahmundry."
+  },
+  {
+    "name": "Government General Hospital (GGH Kakinada)",
+    "category": "Hospitals / Tertiary Care",
+    "latitude": 16.972,
+    "longitude": 82.2395,
+    "description": "1,500-bed premier government teaching hospital and Level-1 trauma center."
+  },
+  {
+    "name": "Medicover Hospitals, Kakinada",
+    "category": "Hospitals / Multi-Specialty",
+    "latitude": 16.985,
+    "longitude": 82.241,
+    "description": "Advanced super-specialty hospital with 24/7 cardiac and critical care."
+  },
+  {
+    "name": "Apollo Specialty Hospital, Kakinada",
+    "category": "Hospitals / Multi-Specialty",
+    "latitude": 16.978,
+    "longitude": 82.245,
+    "description": "Premier multi-specialty healthcare center in Kakinada."
+  },
+  {
+    "name": "Kakinada Deep Water Port",
+    "category": "Maritime / Infrastructure",
+    "latitude": 16.984,
+    "longitude": 82.278,
+    "description": "Major deep water port handling petroleum, fertilizers, and cargo."
+  },
+  {
+    "name": "Kakinada District Collectorate",
+    "category": "Government / Administrative",
+    "latitude": 16.9891,
+    "longitude": 82.2475,
+    "description": "Administrative headquarters and Disaster Management Command Hub of Kakinada District."
+  },
+  {
+    "name": "JNTU Kakinada (JNTUK)",
+    "category": "University / Engineering",
+    "latitude": 16.9785,
+    "longitude": 82.2415,
+    "description": "Renowned technological university campus established in 1946."
+  },
+  {
+    "name": "Bhanugudi Junction",
+    "category": "Urban / Road Junction",
+    "latitude": 16.9805,
+    "longitude": 82.2382,
+    "description": "Major commercial road nexus connecting Main Road and Cinema Road."
+  },
+  {
+    "name": "Kakinada Beach & NTR Beach Promenade",
+    "category": "Coastal / Tourism",
+    "latitude": 17.0012,
+    "longitude": 82.261,
+    "description": "Scenic coastline on the Bay of Bengal and tourist beachfront."
+  }
+]

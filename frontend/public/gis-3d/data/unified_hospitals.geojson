@@ -1,0 +1,101 @@
+{
+  "type": "FeatureCollection",
+  "name": "Hospitals_Healthcare",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "hosp-ggh-kakinada",
+      "properties": {
+        "name": "Government General Hospital (GGH Kakinada / RMC)",
+        "beds": 1500,
+        "type": "Government Tertiary Care & Teaching Hospital",
+        "emergency": "24/7 Level-1 Trauma Care",
+        "specialties": "Super-specialty cardiology, neurology, pediatrics, oncology",
+        "address": "Rangaraya Medical College Campus, Kakinada"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.2395,
+          16.972
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "hosp-medicover",
+      "properties": {
+        "name": "Medicover Hospitals, Kakinada",
+        "beds": 350,
+        "type": "Multi-Specialty Private Hospital",
+        "emergency": "24/7 Advanced Critical & Cardiac Care",
+        "specialties": "Cardiology, Orthopedics, Neurosurgery, Critical Care",
+        "address": "Bhanugudi Junction Road, Kakinada"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.241,
+          16.985
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "hosp-apollo",
+      "properties": {
+        "name": "Apollo Specialty Hospital, Kakinada",
+        "beds": 200,
+        "type": "Corporate Multi-Specialty Hospital",
+        "emergency": "24/7 Emergency & Ambulance Helpline",
+        "specialties": "Organ transplants, Nephrology, Gastroenterology, Oncology",
+        "address": "Main Road, Surya Rao Peta, Kakinada"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.245,
+          16.978
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "hosp-inodaya",
+      "properties": {
+        "name": "Inodaya Super Specialty Hospital",
+        "beds": 180,
+        "type": "Super-Specialty Hospital",
+        "emergency": "24/7 Stroke & Cardiac Emergency",
+        "specialties": "Neuroscience, Joint Replacement, Pulmonology",
+        "address": "Cinema Road, Kakinada"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.237,
+          16.974
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "hosp-aditya-health",
+      "properties": {
+        "name": "Aditya Campus Health Center & Emergency Ward",
+        "beds": 40,
+        "type": "Campus Medical & Emergency Facility",
+        "emergency": "24/7 Campus Ambulance & Doctor Facility",
+        "specialties": "Inpatient medical care, pharmacy, sports medicine",
+        "address": "Near Cotton Bhavan, Aditya University, Surampalem"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.068,
+          17.0885
+        ]
+      }
+    }
+  ]
+}

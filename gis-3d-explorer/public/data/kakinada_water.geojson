@@ -1,0 +1,121 @@
+{
+  "type": "FeatureCollection",
+  "name": "Kakinada_Water_Bodies",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "water-kakinada-bay",
+      "properties": {
+        "id": "water-kakinada-bay",
+        "name": "Kakinada Bay & Coastline",
+        "type": "bay",
+        "salinity": "marine"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [82.2580, 17.0250],
+            [82.2620, 17.0120],
+            [82.2660, 16.9950],
+            [82.2740, 16.9820],
+            [82.2820, 16.9600],
+            [82.2900, 16.9400],
+            [82.3400, 16.9400],
+            [82.3500, 17.0250],
+            [82.2580, 17.0250]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "water-salt-creek",
+      "properties": {
+        "id": "water-salt-creek",
+        "name": "Upputeru / Salt Creek Canal",
+        "type": "canal",
+        "salinity": "brackish"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [82.2280, 16.9380],
+          [82.2320, 16.9430],
+          [82.2355, 16.9480],
+          [82.2410, 16.9540],
+          [82.2490, 16.9600],
+          [82.2580, 16.9680],
+          [82.2690, 16.9740],
+          [82.2780, 16.9780]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "water-boat-club-lake",
+      "properties": {
+        "id": "water-boat-club-lake",
+        "name": "Boat Club Lake (Kakinada)",
+        "type": "lake",
+        "salinity": "freshwater"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [82.2335, 16.9745],
+            [82.2360, 16.9748],
+            [82.2365, 16.9760],
+            [82.2340, 16.9762],
+            [82.2335, 16.9745]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "water-deep-water-port-basin",
+      "properties": {
+        "id": "water-deep-water-port-basin",
+        "name": "Deep Water Port Harbour Basin",
+        "type": "harbour_basin",
+        "salinity": "marine"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [82.2740, 16.9800],
+            [82.2850, 16.9800],
+            [82.2850, 16.9920],
+            [82.2760, 16.9920],
+            [82.2740, 16.9800]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "water-fishing-harbour",
+      "properties": {
+        "id": "water-fishing-harbour",
+        "name": "Kakinada Fishing Harbour Anchorage",
+        "type": "anchorage",
+        "salinity": "marine"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [82.2650, 16.9650],
+            [82.2720, 16.9650],
+            [82.2720, 16.9720],
+            [82.2650, 16.9720],
+            [82.2650, 16.9650]
+          ]
+        ]
+      }
+    }
+  ]
+}

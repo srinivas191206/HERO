@@ -13,6 +13,15 @@ interface RealLeafletMapProps {
   onDispatchOfficer?: (officerId: string, incidentId: string) => void;
   selectedIncidentId?: string | null;
   onSelectIncident?: (incidentId: string | null) => void;
+  onInspectIn3D?: (target: {
+    id?: string;
+    name: string;
+    lat: number;
+    lng: number;
+    kind: 'station' | 'incident' | 'shelter' | 'landmark' | 'officer';
+    description?: string;
+    levels?: number;
+  }) => void;
   isCommandCenter?: boolean;
 }
 
@@ -24,6 +33,7 @@ export default function RealLeafletMap({
   onDispatchOfficer,
   selectedIncidentId = null,
   onSelectIncident,
+  onInspectIn3D,
   isCommandCenter = false
 }: RealLeafletMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -269,6 +279,34 @@ export default function RealLeafletMap({
       });
     });
 
+    // 2b. Draw District Tactical Police Stations & Shelters around active districtCenter
+    if (districtCenter?.lat != null && districtCenter?.lng != null) {
+      const tacticalSites = [
+        { id: 'dpo-hq', name: 'District Police Office (DPO)', lat: districtCenter.lat, lng: districtCenter.lng, kind: 'station' as const, desc: 'Superintendent HQ & 3D Command Post', levels: 4 },
+        { id: 'town-ps', name: 'Town Quick-Response Station', lat: districtCenter.lat + 0.0042, lng: districtCenter.lng - 0.0038, kind: 'station' as const, desc: 'Sector Tactical Police Station', levels: 3 },
+        { id: 'relief-shelter', name: 'Central Disaster Relief Shelter', lat: districtCenter.lat - 0.0035, lng: districtCenter.lng + 0.0048, kind: 'shelter' as const, desc: 'APSDMA Evacuation & Relief Building', levels: 3 }
+      ];
+      tacticalSites.forEach(site => {
+        const badgeBg = site.kind === 'station' ? 'bg-indigo-600' : 'bg-emerald-600';
+        const siteIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `
+            <div class="relative flex flex-col items-center justify-center">
+              <div class="w-6 h-6 rounded-lg ${badgeBg} border-2 border-white shadow-md flex items-center justify-center text-white text-[9px] font-black">
+                ${site.kind === 'station' ? 'PS' : 'SH'}
+              </div>
+            </div>
+          `,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+        const m = L.marker([site.lat, site.lng], { icon: siteIcon }).addTo(markerGroup);
+        m.on('click', () => {
+          setSelectedEntity({ type: 'landmark', data: site });
+        });
+      });
+    }
+
     // 3. Draw Self Position (Pulsing blue marker)
     if (currentOfficerLocation) {
       const icon = L.divIcon({
@@ -397,7 +435,35 @@ export default function RealLeafletMap({
           </div>
 
           {/* Actions */}
-          <div className="border-t border-slate-200 pt-3 flex gap-2 font-sans font-bold">
+          <div className="border-t border-slate-200 pt-3 flex flex-wrap gap-2 font-sans font-bold">
+            {onInspectIn3D && (
+              <button
+                type="button"
+                onClick={() => {
+                  const d = selectedEntity.data;
+                  const kind =
+                    selectedEntity.type === 'incident'
+                      ? 'incident'
+                      : selectedEntity.type === 'officer'
+                        ? 'officer'
+                        : d.kind || (d.type === 'police' || d.type === 'hq' ? 'station' : 'landmark');
+                  const targetLat = d.lat ?? districtCenter?.lat ?? 17.08799;
+                  const targetLng = d.lng ?? districtCenter?.lng ?? 82.06686;
+                  onInspectIn3D({
+                    id: d.id,
+                    name: d.title || d.name,
+                    lat: targetLat,
+                    lng: targetLng,
+                    kind,
+                    levels: d.levels || 4,
+                    description: d.description || d.desc || ''
+                  });
+                }}
+                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-[10px] text-white font-black uppercase rounded-lg flex items-center justify-center gap-1 cursor-pointer transition"
+              >
+                Inspect 3D / Floors
+              </button>
+            )}
             {selectedEntity.type === 'officer' && (
               <>
                 <button 

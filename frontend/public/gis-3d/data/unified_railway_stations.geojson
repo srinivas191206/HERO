@@ -1,0 +1,86 @@
+{
+  "type": "FeatureCollection",
+  "name": "Railway_Stations",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "station-slo",
+      "properties": {
+        "id": "SLO",
+        "name": "Samalkot Junction Railway Station (SLO)",
+        "code": "SLO",
+        "type": "Major Rail Junction",
+        "platforms": 5,
+        "zone": "South Coast Railway",
+        "connections": "Direct train hub for Aditya University (12 km) & Kakinada (14 km)"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.1695,
+          17.052
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "station-cct",
+      "properties": {
+        "id": "CCT",
+        "name": "Kakinada Town Railway Station (CCT)",
+        "code": "CCT",
+        "type": "City Rail Terminal",
+        "platforms": 4,
+        "zone": "South Coast Railway",
+        "connections": "Primary passenger terminal in central Kakinada city"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.2335,
+          16.9535
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "station-coa",
+      "properties": {
+        "id": "COA",
+        "name": "Kakinada Port Railway Station (COA)",
+        "code": "COA",
+        "type": "Harbor Rail Terminal",
+        "platforms": 3,
+        "zone": "South Coast Railway",
+        "connections": "Port rail freight and express terminal"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.268,
+          16.9845
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "station-peddapuram",
+      "properties": {
+        "id": "PDP",
+        "name": "Peddapuram Passenger Railway Station",
+        "code": "PDP",
+        "type": "Local Rail Station",
+        "platforms": 2,
+        "zone": "South Coast Railway",
+        "connections": "Connecting Peddapuram municipality and Surampalem region"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.138,
+          17.078
+        ]
+      }
+    }
+  ]
+}

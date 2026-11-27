@@ -1,0 +1,961 @@
+{
+  "type": "FeatureCollection",
+  "name": "Aditya_Surampalem_3D_Buildings",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": 1324023948,
+      "properties": {
+        "id": 1324023948,
+        "name": "Campus Academic Facility 1",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 11,
+        "height_source": "architectural_model",
+        "levels": 3,
+        "description": "Laboratory & Workshop Block",
+        "tags": {
+          "building": "yes"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.066453,
+              17.0910923
+            ],
+            [
+              82.0670692,
+              17.0911103
+            ],
+            [
+              82.0671032,
+              17.090301
+            ],
+            [
+              82.0665097,
+              17.0902612
+            ],
+            [
+              82.066453,
+              17.0910923
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023949,
+      "properties": {
+        "id": 1324023949,
+        "name": "Campus Academic Facility 2",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 11,
+        "height_source": "architectural_model",
+        "levels": 3,
+        "description": "Laboratory & Workshop Block",
+        "tags": {
+          "building": "yes"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0664341,
+              17.0917282
+            ],
+            [
+              82.0670465,
+              17.0917607
+            ],
+            [
+              82.0670654,
+              17.0913958
+            ],
+            [
+              82.0664379,
+              17.0913524
+            ],
+            [
+              82.0664341,
+              17.0917282
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023950,
+      "properties": {
+        "id": 1324023950,
+        "name": "Ramanujan Bhavan",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 18,
+        "height_source": "architectural_model",
+        "levels": 5,
+        "description": "First Year Foundation & Sciences Block",
+        "tags": {
+          "building": "yes",
+          "name": "Ramanujan Bhavan"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0663641,
+              17.0934529
+            ],
+            [
+              82.0669709,
+              17.0934811
+            ],
+            [
+              82.0670003,
+              17.0926759
+            ],
+            [
+              82.0663759,
+              17.0926308
+            ],
+            [
+              82.0663641,
+              17.0934529
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023951,
+      "properties": {
+        "id": 1324023951,
+        "name": "Newton Bhavan",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 18,
+        "height_source": "architectural_model",
+        "levels": 5,
+        "description": "Core Engineering Block & Departmental Labs",
+        "tags": {
+          "building": "yes",
+          "name": "Newton Bhavan"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0665291,
+              17.0936612
+            ],
+            [
+              82.0669473,
+              17.0936725
+            ],
+            [
+              82.0669709,
+              17.0935768
+            ],
+            [
+              82.0665349,
+              17.0935486
+            ],
+            [
+              82.0665291,
+              17.0936612
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023952,
+      "properties": {
+        "id": 1324023952,
+        "name": "E block",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 14,
+        "height_source": "architectural_model",
+        "levels": 4,
+        "description": "Auditorium, Seminar Halls & Examination Wing",
+        "tags": {
+          "building": "yes",
+          "name": "E block"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0691467,
+              17.092944
+            ],
+            [
+              82.0696474,
+              17.0929665
+            ],
+            [
+              82.0696474,
+              17.0926287
+            ],
+            [
+              82.0691821,
+              17.0926062
+            ],
+            [
+              82.0691467,
+              17.092944
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023953,
+      "properties": {
+        "id": 1324023953,
+        "name": "D Block",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 14,
+        "height_source": "architectural_model",
+        "levels": 4,
+        "description": "Seminar Halls & Advanced Study Facilities",
+        "tags": {
+          "building": "yes",
+          "name": "D Block"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0691762,
+              17.0923922
+            ],
+            [
+              82.0696887,
+              17.0924316
+            ],
+            [
+              82.0697064,
+              17.0920881
+            ],
+            [
+              82.0692056,
+              17.09206
+            ],
+            [
+              82.0691762,
+              17.0923922
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023954,
+      "properties": {
+        "id": 1324023954,
+        "name": "B Block",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 14,
+        "height_source": "architectural_model",
+        "levels": 4,
+        "description": "Applied Sciences & Tutorial Complex",
+        "tags": {
+          "building": "yes",
+          "name": "B Block"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.069241,
+              17.0918629
+            ],
+            [
+              82.0697417,
+              17.091908
+            ],
+            [
+              82.0697299,
+              17.0915814
+            ],
+            [
+              82.0692528,
+              17.0915758
+            ],
+            [
+              82.069241,
+              17.0918629
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023955,
+      "properties": {
+        "id": 1324023955,
+        "name": "A block",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 14,
+        "height_source": "architectural_model",
+        "levels": 4,
+        "description": "Classrooms, Lecture Halls & Faculty Chambers",
+        "tags": {
+          "building": "yes",
+          "name": "A block"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0686519,
+              17.0918122
+            ],
+            [
+              82.0691291,
+              17.0918629
+            ],
+            [
+              82.0691585,
+              17.0915645
+            ],
+            [
+              82.0686872,
+              17.0915476
+            ],
+            [
+              82.0686519,
+              17.0918122
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023956,
+      "properties": {
+        "id": 1324023956,
+        "name": "C Block",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 14,
+        "height_source": "architectural_model",
+        "levels": 4,
+        "description": "Computing Labs & Multimedia Classrooms",
+        "tags": {
+          "building": "yes",
+          "name": "C Block"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0686342,
+              17.0923471
+            ],
+            [
+              82.0691232,
+              17.0923922
+            ],
+            [
+              82.0691644,
+              17.0920375
+            ],
+            [
+              82.068646,
+              17.0919924
+            ],
+            [
+              82.0686342,
+              17.0923471
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023957,
+      "properties": {
+        "id": 1324023957,
+        "name": "Girls Hostel",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "residential",
+        "height": 21,
+        "height_source": "architectural_model",
+        "levels": 6,
+        "description": "Secure Residential Student Quarters (Girls)",
+        "tags": {
+          "building": "yes",
+          "name": "Girls Hostel"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0680039,
+              17.0917728
+            ],
+            [
+              82.0684811,
+              17.0918348
+            ],
+            [
+              82.0685223,
+              17.091542
+            ],
+            [
+              82.0680393,
+              17.0914913
+            ],
+            [
+              82.0680039,
+              17.0917728
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023958,
+      "properties": {
+        "id": 1324023958,
+        "name": "Campus Academic Facility 3",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 11,
+        "height_source": "architectural_model",
+        "levels": 3,
+        "description": "Laboratory & Workshop Block",
+        "tags": {
+          "building": "yes"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0714317,
+              17.0900112
+            ],
+            [
+              82.0719465,
+              17.0899971
+            ],
+            [
+              82.0719101,
+              17.0895676
+            ],
+            [
+              82.0714538,
+              17.0895472
+            ],
+            [
+              82.0714317,
+              17.0900112
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023959,
+      "properties": {
+        "id": 1324023959,
+        "name": "Campus Academic Facility 4",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 11,
+        "height_source": "architectural_model",
+        "levels": 3,
+        "description": "Laboratory & Workshop Block",
+        "tags": {
+          "building": "yes"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0704684,
+              17.0900041
+            ],
+            [
+              82.0710126,
+              17.0899971
+            ],
+            [
+              82.0709831,
+              17.0895402
+            ],
+            [
+              82.070439,
+              17.0895683
+            ],
+            [
+              82.0704684,
+              17.0900041
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023960,
+      "properties": {
+        "id": 1324023960,
+        "name": "Campus Academic Facility 5",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 11,
+        "height_source": "architectural_model",
+        "levels": 3,
+        "description": "Laboratory & Workshop Block",
+        "tags": {
+          "building": "yes"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.070461,
+              17.089252
+            ],
+            [
+              82.0709978,
+              17.089238
+            ],
+            [
+              82.0710126,
+              17.0887811
+            ],
+            [
+              82.070461,
+              17.0888022
+            ],
+            [
+              82.070461,
+              17.089252
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023961,
+      "properties": {
+        "id": 1324023961,
+        "name": "Campus Academic Facility 6",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 11,
+        "height_source": "architectural_model",
+        "levels": 3,
+        "description": "Laboratory & Workshop Block",
+        "tags": {
+          "building": "yes"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.070314,
+              17.0881204
+            ],
+            [
+              82.0706596,
+              17.0881485
+            ],
+            [
+              82.0706816,
+              17.0877197
+            ],
+            [
+              82.070314,
+              17.0876846
+            ],
+            [
+              82.070314,
+              17.0881204
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023962,
+      "properties": {
+        "id": 1324023962,
+        "name": "Campus Academic Facility 7",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 11,
+        "height_source": "architectural_model",
+        "levels": 3,
+        "description": "Laboratory & Workshop Block",
+        "tags": {
+          "building": "yes"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0707405,
+              17.0881485
+            ],
+            [
+              82.0711376,
+              17.0881696
+            ],
+            [
+              82.071167,
+              17.0877689
+            ],
+            [
+              82.0707846,
+              17.0877197
+            ],
+            [
+              82.0707405,
+              17.0881485
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324023963,
+      "properties": {
+        "id": 1324023963,
+        "name": "Campus Academic Facility 8",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 11,
+        "height_source": "architectural_model",
+        "levels": 3,
+        "description": "Laboratory & Workshop Block",
+        "tags": {
+          "building": "yes"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.068402,
+              17.0878322
+            ],
+            [
+              82.0691668,
+              17.0878322
+            ],
+            [
+              82.0691889,
+              17.0876564
+            ],
+            [
+              82.0684241,
+              17.0876635
+            ],
+            [
+              82.068402,
+              17.0878322
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1324024049,
+      "properties": {
+        "id": 1324024049,
+        "name": "Aditya Engineering college",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 15,
+        "height_source": "architectural_model",
+        "levels": 4,
+        "description": "Main Campus Academic Complex (AEC)",
+        "tags": {
+          "building": "college",
+          "name": "Aditya Engineering college"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0664853,
+              17.0901128
+            ],
+            [
+              82.067092,
+              17.0901372
+            ],
+            [
+              82.0671374,
+              17.0893187
+            ],
+            [
+              82.0665335,
+              17.0892944
+            ],
+            [
+              82.0664853,
+              17.0901128
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1434234667,
+      "properties": {
+        "id": 1434234667,
+        "name": "James watt Bhavan",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 18,
+        "height_source": "architectural_model",
+        "levels": 5,
+        "description": "Mechanical & Automation Engineering Laboratories",
+        "tags": {
+          "building": "yes",
+          "name": "James watt Bhavan"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0661073,
+              17.0934593
+            ],
+            [
+              82.0662783,
+              17.0934803
+            ],
+            [
+              82.0663203,
+              17.0926071
+            ],
+            [
+              82.0660962,
+              17.0925973
+            ],
+            [
+              82.0660568,
+              17.0934626
+            ],
+            [
+              82.0661073,
+              17.0934593
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1434240681,
+      "properties": {
+        "id": 1434240681,
+        "name": "Cotton Bhavan",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "administrative",
+        "height": 18,
+        "height_source": "architectural_model",
+        "levels": 5,
+        "description": "Central Administrative Headquarters & Principal Office",
+        "tags": {
+          "building": "yes",
+          "name": "Cotton Bhavan"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.066582,
+              17.0881505
+            ],
+            [
+              82.0666087,
+              17.0877118
+            ],
+            [
+              82.067282,
+              17.0877418
+            ],
+            [
+              82.0672514,
+              17.0881923
+            ],
+            [
+              82.066582,
+              17.0881505
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1434240682,
+      "properties": {
+        "id": 1434240682,
+        "name": "Ratan Tata Bhavan",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 18,
+        "height_source": "architectural_model",
+        "levels": 5,
+        "description": "Electrical, Electronics & Computing Center",
+        "tags": {
+          "building": "yes",
+          "name": "Ratan Tata Bhavan"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0661471,
+              17.0878954
+            ],
+            [
+              82.0665619,
+              17.0879201
+            ],
+            [
+              82.0665702,
+              17.0877016
+            ],
+            [
+              82.0661488,
+              17.0876979
+            ],
+            [
+              82.0661471,
+              17.0878954
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 1434240683,
+      "properties": {
+        "id": 1434240683,
+        "name": "K.L. Rao Bhavan",
+        "campus": "Aditya Educational Institutions, Surampalem",
+        "building": "academic",
+        "height": 18,
+        "height_source": "architectural_model",
+        "levels": 5,
+        "description": "Civil Engineering & Structural Design Center",
+        "tags": {
+          "building": "yes",
+          "name": "K.L. Rao Bhavan"
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              82.0661281,
+              17.0884126
+            ],
+            [
+              82.0661541,
+              17.0879292
+            ],
+            [
+              82.0665525,
+              17.0879507
+            ],
+            [
+              82.0665179,
+              17.0884558
+            ],
+            [
+              82.0662877,
+              17.0884592
+            ],
+            [
+              82.0661012,
+              17.0884415
+            ],
+            [
+              82.0661281,
+              17.0884126
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -13,6 +13,15 @@ interface TacticalMapProps {
   onDispatchOfficer?: (officerId: string, incidentId: string) => void;
   selectedIncidentId?: string | null;
   onSelectIncident?: (incidentId: string | null) => void;
+  onInspectIn3D?: (target: {
+    id?: string;
+    name: string;
+    lat: number;
+    lng: number;
+    kind: 'station' | 'incident' | 'shelter' | 'landmark' | 'officer';
+    description?: string;
+    levels?: number;
+  }) => void;
   isCommandCenter?: boolean;
 }
 

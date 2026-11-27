@@ -9,12 +9,14 @@ import { TacticalButton } from '../../components/ui/TacticalButton';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { DisasterModeBanner } from '../../components/shared/DisasterModeBanner';
 import { TacticalMap } from '../../components/shared/TacticalMap';
+import { Hero3DGisView, FlyTo3DTarget } from '../../components/shared/Hero3DGisView';
+import { getTacticalFacilitiesForDistrict, matchApDistrict } from '../../utils/apDistricts';
 import { clientEventBus } from '../../services/events/EventBus';
 import { 
   ShieldAlert, Activity, Users, Radio, MessageSquare, Database, 
   Map as MapIcon, Key, FileText, Settings, LogOut, RadioTower, 
   AlertTriangle, Navigation, Clock, ShieldCheck, HelpCircle, UserCheck, RefreshCw,
-  Send, CheckCheck, BellOff, Camera, Wifi, PhoneCall, Siren, Bot, ChevronDown, List, MoreVertical, Trash2, Grid, Download, Laptop, Plus, UploadCloud, ArrowLeft, CheckCircle2
+  Send, CheckCheck, BellOff, Camera, Wifi, PhoneCall, Siren, Bot, ChevronDown, List, MoreVertical, Trash2, Grid, Download, Laptop, Plus, UploadCloud, ArrowLeft, CheckCircle2, Globe2, Compass
 } from 'lucide-react';
 import { User, Incident, AuditLog, Message } from '../../types';
 import { clientCommunicationEngine } from '../../services/communication/CommunicationEngine';
@@ -75,6 +77,7 @@ export default function CommandCenterDashboard() {
   }, []);
 
   const [activeTab, setActiveTab] = useState<string>('command');
+  const [pending3dFlyTo, setPending3dFlyTo] = useState<FlyTo3DTarget | null>(null);
   const [officers, setOfficers] = useState<User[]>([]);
   const officersRef = useRef<User[]>([]);
   useEffect(() => {
@@ -786,6 +789,24 @@ export default function CommandCenterDashboard() {
     if (inc) setSelectedIncident(inc);
   };
 
+  const activeDistrictMeta = (() => {
+    const d = syncStatus?.availableDistricts?.find(x => x.id === (activeDistrictId || user?.districtId));
+    const ap = matchApDistrict(d?.name || syncStatus?.districtName || d?.code || syncStatus?.districtCode);
+    const lat = d?.center_lat ?? ap?.centerLat ?? 17.0146;
+    const lng = d?.center_lng ?? ap?.centerLng ?? 81.1826;
+    const name = ap?.district || d?.name || syncStatus?.districtName || 'Eluru';
+    const code = d?.code || syncStatus?.districtCode || ap?.code || 'ELR';
+    return { name, code, lat, lng };
+  })();
+
+  const inspectTargetIn3D = (target: FlyTo3DTarget) => {
+    setPending3dFlyTo({
+      ...target,
+      districtName: target.districtName || activeDistrictMeta.name
+    });
+    setActiveTab('gis3d');
+  };
+
   const handleDispatch = async (officerId: string, incidentId: string) => {
     if (!token) return;
     setDispatchSuccess(null);
@@ -1153,6 +1174,7 @@ export default function CommandCenterDashboard() {
             {[
               { id: 'command', label: 'Tactical HUD', icon: Activity },
               { id: 'map', label: 'Command Radar Map', icon: MapIcon },
+              { id: 'gis3d', label: '3D GIS Explorer', icon: Globe2 },
               { id: 'officers', label: 'Personnel Deployed', icon: Users },
               { id: 'incidents', label: 'Incident Desk', icon: ShieldAlert },
               { id: 'messages', label: 'Group Chat Sync', icon: MessageSquare },
@@ -1286,7 +1308,21 @@ export default function CommandCenterDashboard() {
                 
                 {/* Map Panel */}
                 <div className="xl:col-span-2">
-                  <HUDPanel title="Tactical Command Radar Map" subtitle="Pulsing GPS Telemetry Feed" className="h-[430px]">
+                  <HUDPanel
+                    title="Tactical Command Radar Map"
+                    subtitle="Pulsing GPS Telemetry Feed"
+                    className="h-[430px]"
+                    headerRight={
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('gis3d')}
+                        className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 cursor-pointer transition"
+                      >
+                        <Compass className="w-3.5 h-3.5" />
+                        Open 3D GIS
+                      </button>
+                    }
+                  >
                     <TacticalMap 
                       officers={officers}
                       incidents={incidents}
@@ -1297,6 +1333,7 @@ export default function CommandCenterDashboard() {
                       selectedIncidentId={selectedIncident?.id}
                       onSelectIncident={handleSelectIncidentId}
                       onDispatchOfficer={handleDispatch}
+                      onInspectIn3D={inspectTargetIn3D}
                       isCommandCenter
                     />
                   </HUDPanel>
@@ -1500,6 +1537,25 @@ export default function CommandCenterDashboard() {
                           <div className="pt-2.5 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-500 font-sans font-bold">
                             <span>Reporter: {inc.reporterId}</span>
                             <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  inspectTargetIn3D({
+                                    id: inc.id,
+                                    name: inc.title,
+                                    lat: inc.locationLat ?? activeDistrictMeta.lat,
+                                    lng: inc.locationLng ?? activeDistrictMeta.lng,
+                                    kind: 'incident',
+                                    levels: 4,
+                                    description: inc.description
+                                  });
+                                }}
+                                className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 cursor-pointer"
+                                title="Fly 3D GIS camera to incident & inspect building floors"
+                              >
+                                3D Inspect
+                              </button>
                               {inc.status !== 'Resolved' && (
                                 <button
                                   type="button"
@@ -1547,18 +1603,60 @@ export default function CommandCenterDashboard() {
 
           {/* TAB 2: DETAILED OPERATIONS MAP */}
           {activeTab === 'map' && (
-            <div className="h-[550px] animate-fadeIn">
-              <TacticalMap 
+            <div className="space-y-3 animate-fadeIn">
+              <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl px-4 py-2.5">
+                <div className="text-xs font-bold text-slate-700">
+                  District Radar Map • {activeDistrictMeta.name} ({activeDistrictMeta.code})
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('gis3d')}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 cursor-pointer transition"
+                >
+                  <Globe2 className="w-3.5 h-3.5" />
+                  Launch Full 3D GIS Explorer
+                </button>
+              </div>
+              <div className="h-[540px]">
+                <TacticalMap 
+                  officers={officers}
+                  incidents={incidents}
+                  districtCenter={(() => {
+                    const d = syncStatus?.availableDistricts?.find(x => x.id === (activeDistrictId || user.districtId));
+                    return d?.center_lat != null && d?.center_lng != null ? { lat: d.center_lat, lng: d.center_lng } : null;
+                  })()}
+                  selectedIncidentId={selectedIncident?.id}
+                  onSelectIncident={handleSelectIncidentId}
+                  onDispatchOfficer={handleDispatch}
+                  onInspectIn3D={inspectTargetIn3D}
+                  isCommandCenter
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2B: FULL-HEIGHT 3D GIS & ULPIN FLOOR INSPECTOR */}
+          {activeTab === 'gis3d' && (
+            <div className="h-[calc(100vh-230px)] min-h-[600px] animate-fadeIn">
+              <Hero3DGisView
+                mode="district"
+                districtName={activeDistrictMeta.name}
+                districtCode={activeDistrictMeta.code}
+                centerLat={activeDistrictMeta.lat}
+                centerLng={activeDistrictMeta.lng}
                 officers={officers}
                 incidents={incidents}
-                districtCenter={(() => {
-                  const d = syncStatus?.availableDistricts?.find(x => x.id === (activeDistrictId || user.districtId));
-                  return d?.center_lat != null && d?.center_lng != null ? { lat: d.center_lat, lng: d.center_lng } : null;
-                })()}
-                selectedIncidentId={selectedIncident?.id}
-                onSelectIncident={handleSelectIncidentId}
-                onDispatchOfficer={handleDispatch}
-                isCommandCenter
+                facilities={getTacticalFacilitiesForDistrict(
+                  activeDistrictMeta.name,
+                  activeDistrictMeta.lat,
+                  activeDistrictMeta.lng
+                )}
+                pendingFlyTo={pending3dFlyTo}
+                onEntitySelectedFrom3D={(sel) => {
+                  if (sel.kind === 'incident' && sel.id) {
+                    handleSelectIncidentId(sel.id);
+                  }
+                }}
               />
             </div>
           )}

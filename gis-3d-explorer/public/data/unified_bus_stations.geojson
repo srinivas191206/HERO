@@ -1,0 +1,82 @@
+{
+  "type": "FeatureCollection",
+  "name": "Bus_Stands_Terminals",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "bus-kakinada-rtc",
+      "properties": {
+        "name": "Kakinada APSRTC Central Bus Station (RTC Complex)",
+        "type": "Interstate Bus Terminal",
+        "bays": 48,
+        "operator": "APSRTC",
+        "location": "Cinema Road / Main Road, Kakinada",
+        "services": "Express, Super Luxury, Amaravati & City bus services"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.2385,
+          16.961
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bus-aditya-transit",
+      "properties": {
+        "name": "Aditya Campus Bus Fleet Transportation Hub",
+        "type": "Institutional Transit Hub",
+        "bays": 35,
+        "operator": "Aditya Educational Institutions",
+        "location": "Surampalem Campus",
+        "services": "Fleet of 250+ AC and non-AC buses serving entire East/West Godavari districts"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.0691,
+          17.0894
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bus-samalkot-stand",
+      "properties": {
+        "name": "Samalkot APSRTC Bus Stand",
+        "type": "Regional Bus Station",
+        "bays": 12,
+        "operator": "APSRTC",
+        "location": "Station Road, Samalkot",
+        "services": "Connecting Surampalem, Peddapuram & Kakinada"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.166,
+          17.054
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bus-peddapuram-stand",
+      "properties": {
+        "name": "Peddapuram APSRTC Bus Station",
+        "type": "Regional Bus Station",
+        "bays": 10,
+        "operator": "APSRTC",
+        "location": "Main Road, Peddapuram",
+        "services": "Connecting NH-16, Surampalem campus & Kakinada"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.135,
+          17.081
+        ]
+      }
+    }
+  ]
+}

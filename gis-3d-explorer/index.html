@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HERO 3D GIS - Aditya University & Kakinada Region</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2338bdf8'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>" />
+    <link rel="stylesheet" href="/src/styles/main.css" />
+  </head>
+  <body>
+    <div id="app-container">
+      <!-- 3D Globe WebGL Container -->
+      <div id="cesium-container"></div>
+
+      <!-- TOP BAR -->
+      <header id="top-bar">
+        <div class="top-left">
+          <span class="brand-badge-ref">3D ULPIN</span>
+          <span class="brand-sub-ref">Vertical Property Mapper</span>
+        </div>
+
+        <div class="top-center">
+          <div id="search-container"></div>
+        </div>
+
+        <div class="top-right">
+          <button class="top-nav-link" id="btn-stats-modal">Stats</button>
+          <div class="status-pill">
+            <span class="status-dot"></span>
+            <span>LIVE 3D GIS</span>
+          </div>
+          <button class="top-btn" id="btn-fullscreen" title="Toggle Fullscreen">⛶ Fullscreen</button>
+        </div>
+      </header>
+
+      <!-- LEFT FLOATING LAYER MANAGEMENT PANEL -->
+      <div id="left-panel-container"></div>
+
+      <!-- FLOATING VERTICAL LEVEL SELECTOR (Floors / Slicing) -->
+      <div id="level-selector-container"></div>
+
+      <!-- RIGHT FLOATING AREA OF INTEREST & INSPECTOR -->
+      <div id="right-panel-container"></div>
+
+      <!-- BOTTOM RIGHT: PARCEL CONTEXT (2D Footprint Mini-Map) -->
+      <div id="bottom-right-container"></div>
+
+      <!-- BOTTOM CENTER: FLOATING MAP CONTROLS -->
+      <div id="floating-controls-container"></div>
+
+      <!-- BOTTOM GIS STATUS BAR -->
+      <footer id="bottom-status-bar">
+        <div class="status-left">
+          <div class="status-entry">
+            <span class="entry-val highlight" id="bottom-building-badge">3,433 3D Buildings & Bhavans</span>
+          </div>
+          <div class="status-entry">
+            <span class="entry-label">CORRIDOR:</span>
+            <span class="entry-val">Surampalem · Samalkot · Kakinada</span>
+          </div>
+          <div class="status-entry">
+            <span class="entry-label">CRS:</span>
+            <span class="entry-val">EPSG:4326 · Z in m</span>
+          </div>
+        </div>
+
+        <div class="status-right">
+          <div class="status-entry">
+            <span class="entry-label">LAT:</span>
+            <span class="entry-val" id="cursor-lat">17.08500° N</span>
+          </div>
+          <div class="status-entry">
+            <span class="entry-label">LON:</span>
+            <span class="entry-val" id="cursor-lon">82.06750° E</span>
+          </div>
+          <div class="status-entry">
+            <span class="entry-label">ALT:</span>
+            <span class="entry-val" id="camera-alt">850 m</span>
+          </div>
+          <div class="status-entry">
+            <span class="entry-label">DATA:</span>
+            <span class="entry-val">OSM, Esri, SCR</span>
+          </div>
+        </div>
+      </footer>
+
+      <!-- Initial Loading Screen Overlay -->
+      <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loading-text">Initializing 3D GIS Platform...</div>
+        <div class="loading-sub" id="loading-sub">Loading Aditya Bhavans, ADB Highway, Railways, Hospitals & Kakinada 3D Footprints...</div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
