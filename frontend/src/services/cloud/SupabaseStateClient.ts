@@ -24,9 +24,97 @@ function randomHexKey(bytesLength = 16): string {
   return safeRandomUUID().replace(/-/g, '');
 }
 
+export class SupabaseSessionExpiredError extends Error {
+  constructor(message = 'Supabase session expired. Please sign in again.') {
+    super(message);
+    this.name = 'SupabaseSessionExpiredError';
+  }
+}
+
+let inFlightRefresh: Promise<string | null> | null = null;
+
 export class SupabaseStateClient {
   static isConfigured(): boolean {
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  }
+
+  static isJwtExpired(token?: string | null, bufferSeconds = 30): boolean {
+    if (!token) return true;
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return false;
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(base64));
+      if (!payload?.exp) return false;
+      return Date.now() / 1000 >= payload.exp - bufferSeconds;
+    } catch {
+      return false;
+    }
+  }
+
+  static async refreshSession(): Promise<string | null> {
+    if (typeof window === 'undefined' || !this.isConfigured()) return null;
+    if (inFlightRefresh) return inFlightRefresh;
+
+    inFlightRefresh = (async () => {
+      try {
+        const refreshToken = localStorage.getItem('hero_refresh_token');
+        if (!refreshToken) return null;
+
+        const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        const nextAccess = data?.access_token as string | undefined;
+        const nextRefresh = data?.refresh_token as string | undefined;
+        if (!nextAccess) return null;
+
+        localStorage.setItem('tactical_token', nextAccess);
+        if (nextRefresh) localStorage.setItem('hero_refresh_token', nextRefresh);
+        window.dispatchEvent(new CustomEvent('hero:token-refreshed', { detail: { token: nextAccess } }));
+        return nextAccess;
+      } catch {
+        return null;
+      } finally {
+        inFlightRefresh = null;
+      }
+    })();
+
+    return inFlightRefresh;
+  }
+
+  private static async authedFetch(url: string, accessToken: string, init: RequestInit = {}): Promise<Response> {
+    let activeToken = accessToken;
+    if (this.isJwtExpired(activeToken)) {
+      const refreshed = await this.refreshSession();
+      if (!refreshed) {
+        throw new SupabaseSessionExpiredError();
+      }
+      activeToken = refreshed;
+    }
+
+    const doFetch = (tok: string) =>
+      fetch(url, {
+        ...init,
+        headers: {
+          ...this.headers(tok),
+          ...(init.headers as Record<string, string> | undefined)
+        }
+      });
+
+    let res = await doFetch(activeToken);
+    if (res.status === 401) {
+      const refreshed = await this.refreshSession();
+      if (!refreshed) {
+        throw new SupabaseSessionExpiredError();
+      }
+      res = await doFetch(refreshed);
+    }
+    return res;
   }
 
   static getConnectionMode(): 'local' | 'cloud' {
@@ -71,7 +159,14 @@ export class SupabaseStateClient {
     }
 
     const accessToken = authData.access_token as string;
+    const refreshToken = authData.refresh_token as string | undefined;
     const authUserId = authData.user?.id as string;
+
+    if (typeof window !== 'undefined' && refreshToken) {
+      try {
+        localStorage.setItem('hero_refresh_token', refreshToken);
+      } catch {}
+    }
 
     const profileRes = await fetch(
       `${SUPABASE_URL}/rest/v1/users?auth_user_id=eq.${encodeURIComponent(authUserId)}&select=id,badge_number,name,role,status,battery,team_id,district_id`,
@@ -106,12 +201,15 @@ export class SupabaseStateClient {
 
   static async fetchStateOverview(accessToken: string): Promise<DistrictSummary[]> {
     const [distRes, usersRes, incRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/districts?select=*&order=created_at.asc`, { headers: this.headers(accessToken) }),
-      fetch(`${SUPABASE_URL}/rest/v1/users?select=id,district_id,role,status`, { headers: this.headers(accessToken) }),
-      fetch(`${SUPABASE_URL}/rest/v1/incidents?select=id,district_id,priority,status`, { headers: this.headers(accessToken) })
+      this.authedFetch(`${SUPABASE_URL}/rest/v1/districts?select=*&order=created_at.asc`, accessToken),
+      this.authedFetch(`${SUPABASE_URL}/rest/v1/users?select=id,district_id,role,status`, accessToken),
+      this.authedFetch(`${SUPABASE_URL}/rest/v1/incidents?select=id,district_id,priority,status`, accessToken)
     ]);
 
-    if (!distRes.ok) throw new Error('Failed to load districts from Supabase.');
+    if (!distRes.ok) {
+      if (distRes.status === 401) throw new SupabaseSessionExpiredError();
+      throw new Error(`Failed to load districts from Supabase (HTTP ${distRes.status}).`);
+    }
     const districts = await distRes.json();
     const users = usersRes.ok ? await usersRes.json() : [];
     const incidents = incRes.ok ? await incRes.json() : [];
@@ -150,9 +248,9 @@ export class SupabaseStateClient {
     const plainNodeKey = `hk_${randomHexKey(16)}`;
     const nodeKeyHash = await sha256Hex(plainNodeKey);
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/districts`, {
+    const res = await this.authedFetch(`${SUPABASE_URL}/rest/v1/districts`, accessToken, {
       method: 'POST',
-      headers: { ...this.headers(accessToken), Prefer: 'return=representation' },
+      headers: { Prefer: 'return=representation' },
       body: JSON.stringify({
         id,
         code: cleanCode,

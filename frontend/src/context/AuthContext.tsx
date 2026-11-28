@@ -43,40 +43,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isForcedOffline, setIsForcedOffline] = useState<boolean>(false);
   const [transportProvider, setTransportProvider] = useState<SocketTransportProvider | null>(null);
 
-  // Load existing credentials on startup
+  // Load existing credentials on startup & keep cloud JWT refreshed
   useEffect(() => {
-    try {
-      const savedToken = typeof window !== 'undefined' ? localStorage.getItem('tactical_token') : null;
-      const savedUser = typeof window !== 'undefined' ? localStorage.getItem('tactical_user') : null;
-      const savedMode = typeof window !== 'undefined' ? (localStorage.getItem('hero_auth_mode') as 'local' | 'cloud' | null) : null;
+    const initSession = async () => {
+      try {
+        const savedToken = typeof window !== 'undefined' ? localStorage.getItem('tactical_token') : null;
+        const savedUser = typeof window !== 'undefined' ? localStorage.getItem('tactical_user') : null;
+        const savedMode = typeof window !== 'undefined' ? (localStorage.getItem('hero_auth_mode') as 'local' | 'cloud' | null) : null;
 
-      if (savedToken && savedUser) {
-        try {
-          const parsedUser = JSON.parse(savedUser) as User;
-          const resolvedMode = savedMode || 'local';
-          setToken(savedToken);
-          setUser(parsedUser);
-          setAuthMode(resolvedMode);
-
-          if (resolvedMode === 'local') {
-            const transport = new SocketTransportProvider();
-            transport.connect(parsedUser.id, parsedUser.role, parsedUser.teamId, savedToken);
-            clientCommunicationEngine.setTransport(transport);
-            setTransportProvider(transport);
-          }
-        } catch (err) {
-          console.error('Failed to parse cached session:', err);
+        if (savedToken && savedUser) {
           try {
-            localStorage.removeItem('tactical_token');
-            localStorage.removeItem('tactical_user');
-            localStorage.removeItem('hero_auth_mode');
-          } catch (_) {}
+            const parsedUser = JSON.parse(savedUser) as User;
+            const resolvedMode = savedMode || 'local';
+            let activeToken = savedToken;
+
+            if (resolvedMode === 'cloud' && SupabaseStateClient.isJwtExpired(savedToken)) {
+              const refreshed = await SupabaseStateClient.refreshSession();
+              if (!refreshed) {
+                localStorage.removeItem('tactical_token');
+                localStorage.removeItem('tactical_user');
+                localStorage.removeItem('hero_auth_mode');
+                localStorage.removeItem('hero_refresh_token');
+                return;
+              }
+              activeToken = refreshed;
+            }
+
+            setToken(activeToken);
+            setUser(parsedUser);
+            setAuthMode(resolvedMode);
+
+            if (resolvedMode === 'local') {
+              const transport = new SocketTransportProvider();
+              transport.connect(parsedUser.id, parsedUser.role, parsedUser.teamId, activeToken);
+              clientCommunicationEngine.setTransport(transport);
+              setTransportProvider(transport);
+            }
+          } catch (err) {
+            console.error('Failed to parse cached session:', err);
+            try {
+              localStorage.removeItem('tactical_token');
+              localStorage.removeItem('tactical_user');
+              localStorage.removeItem('hero_auth_mode');
+              localStorage.removeItem('hero_refresh_token');
+            } catch (_) {}
+          }
         }
+      } catch (err) {
+        console.warn('LocalStorage read blocked or unavailable in this browser context:', err);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.warn('LocalStorage read blocked or unavailable in this browser context:', err);
-    } finally {
-      setIsLoading(false);
+    };
+
+    initSession();
+
+    const onTokenRefreshed = (e: Event) => {
+      const nextToken = (e as CustomEvent<{ token: string }>).detail?.token;
+      if (nextToken) setToken(nextToken);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('hero:token-refreshed', onTokenRefreshed);
+      return () => window.removeEventListener('hero:token-refreshed', onTokenRefreshed);
     }
   }, []);
 
@@ -170,6 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('tactical_token');
         localStorage.removeItem('tactical_user');
         localStorage.removeItem('hero_auth_mode');
+        localStorage.removeItem('hero_refresh_token');
       } catch (e) {
         console.warn('LocalStorage clear blocked in this browser context:', e);
       }

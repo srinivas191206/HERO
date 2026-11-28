@@ -11,7 +11,7 @@ import { Hero3DGisView, FlyTo3DTarget } from '../../components/shared/Hero3DGisV
 import { IntelligenceModuleRenderer } from '../../components/intelligence/IntelligenceModuleRenderer';
 import { getEnabledIntelligenceModules, IntelligenceModuleId } from '../../config/intelligenceModules';
 import { AP_DISTRICTS, getTacticalFacilitiesForDistrict, matchApDistrict } from '../../utils/apDistricts';
-import { SupabaseStateClient } from '../../services/cloud/SupabaseStateClient';
+import { SupabaseStateClient, SupabaseSessionExpiredError } from '../../services/cloud/SupabaseStateClient';
 import { DistrictSummary } from '../../types';
 import {
   Building2, ShieldAlert, Users, Wifi, WifiOff, Plus, Download,
@@ -104,8 +104,13 @@ export default function StateAdminPortal() {
       }
     } catch (err: any) {
       console.error('Failed to fetch state overview:', err);
+      if (err instanceof SupabaseSessionExpiredError) {
+        await logout();
+        router.replace('/login');
+        return;
+      }
       const msg = err?.message || 'Unable to load districts.';
-      setFeedback({ type: 'err', text: `${msg} Click Refresh or sign in again if your session expired.` });
+      setFeedback({ type: 'err', text: `${msg} Click Refresh or sign out and sign in again.` });
     } finally {
       setLoadingData(false);
     }
@@ -604,6 +609,16 @@ export default function StateAdminPortal() {
                     className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black uppercase text-[10px] cursor-pointer"
                   >
                     Refresh State Overview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await logout();
+                      router.push('/login');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-black uppercase text-[10px] cursor-pointer"
+                  >
+                    Sign Out &amp; Re-Login
                   </button>
                   <button
                     type="button"
