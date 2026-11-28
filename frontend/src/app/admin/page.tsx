@@ -8,12 +8,15 @@ import { HUDPanel } from '../../components/ui/HUDPanel';
 import { TacticalButton } from '../../components/ui/TacticalButton';
 import { TacticalMap } from '../../components/shared/TacticalMap';
 import { Hero3DGisView, FlyTo3DTarget } from '../../components/shared/Hero3DGisView';
+import { IntelligenceModuleRenderer } from '../../components/intelligence/IntelligenceModuleRenderer';
+import { getEnabledIntelligenceModules, IntelligenceModuleId } from '../../config/intelligenceModules';
 import { AP_DISTRICTS, getTacticalFacilitiesForDistrict, matchApDistrict } from '../../utils/apDistricts';
 import { SupabaseStateClient } from '../../services/cloud/SupabaseStateClient';
 import { DistrictSummary } from '../../types';
 import {
   Building2, ShieldAlert, Users, Wifi, WifiOff, Plus, Download,
-  ExternalLink, LogOut, RefreshCw, Map as MapIcon, UserPlus, CheckCircle2, KeyRound, Globe2, Compass
+  ExternalLink, LogOut, RefreshCw, Map as MapIcon, UserPlus, CheckCircle2, KeyRound, Globe2, Compass,
+  Waves, CloudRain, Flame, CloudLightning, Route as RouteIcon, Mountain
 } from 'lucide-react';
 
 const getBackendUrl = () => {
@@ -30,7 +33,7 @@ export default function StateAdminPortal() {
   const { user, token, authMode, logout, isAuthenticated, isLoading } = useAuth();
   const { isOnline } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'map3d' | 'provision' | 'map'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'map3d' | 'provision' | 'map' | IntelligenceModuleId>('overview');
   const [selected3dDistrictName, setSelected3dDistrictName] = useState<string>('');
   const [pending3dFlyTo, setPending3dFlyTo] = useState<FlyTo3DTarget | null>(null);
   const [districts, setDistricts] = useState<DistrictSummary[]>([]);
@@ -436,6 +439,38 @@ export default function StateAdminPortal() {
                 >
                   <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-sky-600' : 'text-slate-400'}`} />
                   <span>{t.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Standalone Role-Assignable Disaster Intelligence Modules */}
+          <nav aria-label="Disaster Intelligence Modules" className="border-t border-slate-200 pt-3 space-y-1">
+            <span className="text-[9px] text-slate-400 uppercase tracking-widest px-3 mb-1.5 block font-black">
+              DISASTER INTELLIGENCE
+            </span>
+            {getEnabledIntelligenceModules().map(mod => {
+              const Icon =
+                mod.id === 'dam_break' ? Waves :
+                mod.id === 'flash_flood' ? CloudRain :
+                mod.id === 'heatwave' ? Flame :
+                mod.id === 'rainfall_ews' ? CloudLightning :
+                mod.id === 'urban_flood' ? RouteIcon :
+                Mountain;
+              const active = activeTab === mod.id;
+              return (
+                <button
+                  key={mod.id}
+                  type="button"
+                  onClick={() => setActiveTab(mod.id)}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2 rounded-2xl text-[11px] font-black uppercase tracking-wider text-left transition cursor-pointer ${
+                    active
+                      ? 'bg-indigo-50 text-indigo-700 border-l-4 border-indigo-600 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
+                  <span className="truncate">{mod.label}</span>
                 </button>
               );
             })}
@@ -986,6 +1021,26 @@ export default function StateAdminPortal() {
               isCommandCenter
             />
           </HUDPanel>
+        )}
+
+        {(activeTab === 'dam_break' ||
+          activeTab === 'flash_flood' ||
+          activeTab === 'heatwave' ||
+          activeTab === 'rainfall_ews' ||
+          activeTab === 'urban_flood' ||
+          activeTab === 'landslide') && (
+          <IntelligenceModuleRenderer
+            moduleId={activeTab}
+            onInspectIn3D={(target) => {
+              const matched = matchApDistrict(target.districtName || target.name);
+              setSelected3dDistrictName(matched?.district || target.districtName || '');
+              setPending3dFlyTo({
+                ...target,
+                districtName: matched?.district || target.districtName
+              });
+              setActiveTab('map3d');
+            }}
+          />
         )}
       </main>
       </section>

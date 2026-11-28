@@ -25,6 +25,44 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   overflow-x: hidden;
+  accent-color: #0284c7;
+  color-scheme: light;
+}
+
+@supports not (accent-color: #0284c7) {
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 4px;
+    background: #cbd5e1;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #0284c7;
+    margin-top: -4px;
+    cursor: pointer;
+  }
+}
+
+.intel-table-wrapper {
+  overflow: auto;
+  max-inline-size: 100%;
+  max-block-size: min(440px, 68vh);
+  container-type: inline-size;
+}
+
+.intel-table-wrapper thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
 }
 
 /* Custom Telemetry Scrollbars for Light Theme */
