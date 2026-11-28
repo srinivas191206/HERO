@@ -41,6 +41,8 @@ export interface MapPolylineSpec {
   onClick?: () => void;
 }
 
+export type BasemapKind = 'street' | 'osm' | 'satellite' | 'topo';
+
 export interface IntelligenceLeafletMapProps {
   center: [number, number];
   zoom: number;
@@ -51,9 +53,28 @@ export interface IntelligenceLeafletMapProps {
   polygons?: MapPolygonSpec[];
   polylines?: MapPolylineSpec[];
   markers?: MapMarkerSpec[];
-  baseStyle?: 'voyager' | 'dark' | 'topo';
+  baseStyle?: 'voyager' | 'dark' | 'topo' | 'satellite' | 'osm';
   className?: string;
 }
+
+const BASEMAP_URLS: Record<BasemapKind, { label: string; url: string }> = {
+  street: {
+    label: 'Streets',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+  },
+  osm: {
+    label: 'OSM',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+  },
+  satellite: {
+    label: 'Satellite',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+  },
+  topo: {
+    label: 'Terrain',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'
+  }
+};
 
 export default function IntelligenceLeafletInner({
   center,
@@ -68,6 +89,9 @@ export default function IntelligenceLeafletInner({
   baseStyle = 'voyager',
   className = ''
 }: IntelligenceLeafletMapProps) {
+  const initialBasemap: BasemapKind =
+    baseStyle === 'topo' ? 'topo' : baseStyle === 'satellite' ? 'satellite' : baseStyle === 'osm' ? 'osm' : 'street';
+  const [basemap, setBasemap] = React.useState<BasemapKind>(initialBasemap);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const baseLayerRef = useRef<L.TileLayer | null>(null);
@@ -93,7 +117,7 @@ export default function IntelligenceLeafletInner({
         tile.height = size.y;
         const ctx = tile.getContext('2d');
         if (ctx) {
-          ctx.fillStyle = baseStyle === 'dark' ? '#0f172a' : '#f1f5f9';
+          ctx.fillStyle = '#f1f5f9';
           ctx.fillRect(0, 0, size.x, size.y);
           ctx.strokeStyle = 'rgba(14, 165, 233, 0.14)';
           ctx.strokeRect(0, 0, size.x, size.y);
@@ -103,14 +127,7 @@ export default function IntelligenceLeafletInner({
     });
     new (OfflineGrid as any)({ zIndex: 0 }).addTo(map);
 
-    const tileUrl =
-      baseStyle === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : baseStyle === 'topo'
-          ? 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'
-          : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-
-    baseLayerRef.current = L.tileLayer(tileUrl, { maxZoom: 18, zIndex: 1 }).addTo(map);
+    baseLayerRef.current = L.tileLayer(BASEMAP_URLS[basemap].url, { maxZoom: 18, zIndex: 1 }).addTo(map);
     geojsonGroupRef.current = L.layerGroup().addTo(map);
     vectorGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
@@ -121,6 +138,16 @@ export default function IntelligenceLeafletInner({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Swap basemap layer cleanly without API keys
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (baseLayerRef.current) {
+      map.removeLayer(baseLayerRef.current);
+    }
+    baseLayerRef.current = L.tileLayer(BASEMAP_URLS[basemap].url, { maxZoom: 18, zIndex: 1 }).addTo(map);
+  }, [basemap]);
 
   // Re-center / zoom cleanly when requested
   useEffect(() => {
@@ -226,6 +253,20 @@ export default function IntelligenceLeafletInner({
 
   return (
     <div className={`relative w-full h-full rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 ${className}`}>
+      <div className="absolute top-3 right-3 z-[500] flex items-center gap-1 bg-white/95 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-md">
+        {(Object.keys(BASEMAP_URLS) as BasemapKind[]).map(key => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setBasemap(key)}
+            className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase cursor-pointer transition ${
+              basemap === key ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            {BASEMAP_URLS[key].label}
+          </button>
+        ))}
+      </div>
       <div ref={containerRef} className="w-full h-full min-h-[380px] z-0" />
     </div>
   );

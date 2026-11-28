@@ -85,9 +85,9 @@ export const MAP_CONFIG = {
       attribution: "© OpenStreetMap contributors"
     },
     cartoDark: {
-      name: "CartoDB Dark Matter",
-      url: "https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png",
-      attribution: "© OpenStreetMap contributors, © CARTO"
+      name: "Esri World Topo Map",
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+      attribution: "Tiles © Esri"
     }
   },
   buildingStyle: {

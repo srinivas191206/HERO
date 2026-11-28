@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Compass, Navigation, RefreshCw, Route } from 'lucide-react';
 import { HUDPanel } from '../ui/HUDPanel';
-import { IntelligenceLeafletMap, MapMarkerSpec, MapPolylineSpec } from './IntelligenceLeafletMap';
+import { IntelligenceLeafletMap, MapMarkerSpec, MapPolygonSpec, MapPolylineSpec } from './IntelligenceLeafletMap';
 import { fetchPointWeather, PointWeatherTelemetry } from '../../services/intelligence/OpenMeteoService';
 import { sampleTerrainAndSlope } from '../../services/intelligence/TerrariumElevationService';
 
@@ -137,9 +137,10 @@ export const UrbanFloodIntelligence: React.FC<UrbanFloodIntelligenceProps> = ({ 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hub.id]);
 
-  const { polylines, markers, floodedCount, safeCount } = useMemo(() => {
+  const { polygons, polylines, markers, floodedCount, safeCount } = useMemo(() => {
     let fCount = 0;
     let sCount = 0;
+    const polys: MapPolygonSpec[] = [];
     const lines: MapPolylineSpec[] = [];
     const mks: MapMarkerSpec[] = [];
 
@@ -160,6 +161,25 @@ export const UrbanFloodIntelligence: React.FC<UrbanFloodIntelligenceProps> = ({ 
       });
 
       const mid = seg.path[Math.floor(seg.path.length / 2)];
+      if (isFlooded) {
+        const pad = 0.0035 + waterDepthM * 0.0015;
+        polys.push({
+          id: `uf-zone-${seg.id}`,
+          positions: [
+            [mid[0] - pad, mid[1] - pad],
+            [mid[0] - pad, mid[1] + pad],
+            [mid[0] + pad, mid[1] + pad],
+            [mid[0] + pad, mid[1] - pad]
+          ],
+          color: '#dc2626',
+          fillColor: '#ef4444',
+          fillOpacity: 0.25,
+          weight: 1.5,
+          title: `Waterlogged Basin: ${seg.name}`,
+          subtitle: `Depth ${waterDepthM.toFixed(1)}m exceeds ${seg.thresholdDepthM}m drain threshold`
+        });
+      }
+
       mks.push({
         id: `umk-${seg.id}`,
         lat: mid[0],
@@ -173,7 +193,7 @@ export const UrbanFloodIntelligence: React.FC<UrbanFloodIntelligenceProps> = ({ 
       });
     });
 
-    return { polylines: lines, markers: mks, floodedCount: fCount, safeCount: sCount };
+    return { polygons: polys, polylines: lines, markers: mks, floodedCount: fCount, safeCount: sCount };
   }, [hub, waterDepthM]);
 
   return (
@@ -280,6 +300,7 @@ export const UrbanFloodIntelligence: React.FC<UrbanFloodIntelligenceProps> = ({ 
             zoom={13}
             geojsonData={hub.id === 'kakinada' ? kakinadaRoadsGj : null}
             geojsonStyle={() => ({ color: '#64748b', weight: 1.2, opacity: 0.45 })}
+            polygons={polygons}
             polylines={polylines}
             markers={markers}
           />

@@ -92,11 +92,11 @@ export default function RealLeafletMap({
     });
     new (OfflineGridLayer as any)({ zIndex: 0 }).addTo(map);
 
-    // CartoDB Voyager tiles (loads when internet is available)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 20,
+    // Free API-keyless Esri World Street Map tiles (with offline grid underneath)
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
       zIndex: 1,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ'
     }).addTo(map);
 
     // Create a layer group to hold dynamic markers so we can clear/refresh them easily

@@ -98,9 +98,14 @@ export default function StateAdminPortal() {
         if (!assignDistrictId && data.districts?.length > 0) {
           setAssignDistrictId(data.districts[0].id);
         }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setFeedback({ type: 'err', text: errData.error || `State overview failed (HTTP ${res.status}).` });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch state overview:', err);
+      const msg = err?.message || 'Unable to load districts.';
+      setFeedback({ type: 'err', text: `${msg} Click Refresh or sign in again if your session expired.` });
     } finally {
       setLoadingData(false);
     }
@@ -581,6 +586,36 @@ export default function StateAdminPortal() {
         )}
 
         {activeTab === 'overview' && (
+          districts.length === 0 ? (
+            <HUDPanel
+              title="No District Hubs Loaded"
+              subtitle={loadingData ? 'Syncing State Registry...' : 'Verify State Link or Provision First District'}
+            >
+              <div className="py-8 flex flex-col items-center justify-center text-center gap-3 text-xs text-slate-600">
+                <p className="max-w-md">
+                  {loadingData
+                    ? 'Loading provisioned districts from State Cloud / local backend...'
+                    : 'No districts returned yet. If your State Admin session expired, sign out and log in again, or create a new district hub.'}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={fetchOverview}
+                    className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black uppercase text-[10px] cursor-pointer"
+                  >
+                    Refresh State Overview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('provision')}
+                    className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-black uppercase text-[10px] cursor-pointer"
+                  >
+                    Create District Hub
+                  </button>
+                </div>
+              </div>
+            </HUDPanel>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {districts.map(dist => {
               const isSynced = dist.status === 'online';
@@ -673,6 +708,7 @@ export default function StateAdminPortal() {
               );
             })}
           </div>
+          )
         )}
 
         {activeTab === 'map3d' && (() => {
