@@ -1468,7 +1468,7 @@ export default function StateAdminPortal() {
             </div>
           )}
 
-          {/* 3D MAP TAB */}
+          {/* 3D MAP TAB (Unified Native HERO 3D GIS Workspace) */}
           {activeTab === 'map3d' && (() => {
             const apMeta = matchApDistrict(selected3dDistrictName);
             const heroDist = districts.find(
@@ -1480,40 +1480,12 @@ export default function StateAdminPortal() {
             const facilities = activeDistName
               ? getTacticalFacilitiesForDistrict(activeDistName, activeLat ?? 17.0146, activeLng ?? 81.1826)
               : [];
+            const scopedIncidents = heroDist
+              ? stateIncidents.filter(i => i.districtId === heroDist.id)
+              : stateIncidents;
 
             return (
-              <div className="space-y-3 h-[calc(100vh-215px)] min-h-[580px] flex flex-col">
-                <div className="bg-white border border-slate-200 rounded-2xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-[#0E5AD6] tracking-wider block">
-                      ANDHRA PRADESH 3D GIS &amp; ULPIN EXPLORER
-                    </span>
-                    <span className="font-bold text-slate-800">
-                      {activeDistName
-                        ? `${activeDistName} (${apMeta?.code || heroDist?.code || 'AP'}) • Lat ${activeLat?.toFixed(4)}, Lng ${activeLng?.toFixed(4)}`
-                        : 'All 28 Andhra Pradesh Districts • Statewide Terrain & Tactical Facilities'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      aria-label="Filter 3D Map by Andhra Pradesh District"
-                      value={selected3dDistrictName}
-                      onChange={(e) => {
-                        setSelected3dDistrictName(e.target.value);
-                        setPending3dFlyTo(null);
-                      }}
-                      className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#0E5AD6] cursor-pointer"
-                    >
-                      <option value="">All 28 AP Districts (State Overview)</option>
-                      {AP_DISTRICTS.map(d => (
-                        <option key={d.district} value={d.district}>
-                          {d.district} ({d.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
+              <div className="h-[calc(100vh-205px)] min-h-[620px] flex flex-col">
                 <Hero3DGisView
                   mode={activeDistName ? 'district' : 'state'}
                   districtName={activeDistName}
@@ -1521,8 +1493,17 @@ export default function StateAdminPortal() {
                   centerLat={activeLat}
                   centerLng={activeLng}
                   districts={districts}
+                  officers={stateOfficers}
+                  incidents={scopedIncidents}
                   facilities={facilities}
                   pendingFlyTo={pending3dFlyTo}
+                  selectedDistrictValue={selected3dDistrictName}
+                  onDistrictSelectChange={(nextDist) => {
+                    setSelected3dDistrictName(nextDist);
+                    setPending3dFlyTo(null);
+                  }}
+                  liveTemperatures={liveTempsByDistrict}
+                  isNetworkOnline={isOnline}
                   onEntitySelectedFrom3D={(sel) => {
                     if (sel.kind === 'district' && sel.name) {
                       setSelected3dDistrictName(sel.name);
