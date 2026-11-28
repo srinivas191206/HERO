@@ -3,62 +3,225 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
-import { Shield, Key, RefreshCw, Smartphone, RadioTower, CheckCircle2, Lock, Settings, Cloud } from 'lucide-react';
-import { TacticalButton } from '../../components/ui/TacticalButton';
 import { SupabaseStateClient } from '../../services/cloud/SupabaseStateClient';
+import {
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Cloud,
+  Eye,
+  EyeOff,
+  Globe,
+  Info,
+  Lock,
+  Mail,
+  Moon,
+  RadioTower,
+  RefreshCw,
+  Settings,
+  ShieldCheck,
+  Smartphone,
+  Sun,
+  X
+} from 'lucide-react';
+
+type LoginLanguage = 'en' | 'te';
+type ThemeMode = 'light' | 'dark';
+
+const COPY: Record<
+  LoginLanguage,
+  {
+    apPoliceEn: string;
+    apPoliceTe: string;
+    portalSubtitle: string;
+    secureAccess: string;
+    authorizedOnly: string;
+    connectionMode: string;
+    districtNode: string;
+    districtSub: string;
+    stateCloud: string;
+    stateSub: string;
+    emailPlaceholderCloud: string;
+    emailPlaceholderLocal: string;
+    passwordPlaceholder: string;
+    rememberDevice: string;
+    forgotPassword: string;
+    secureLogin: string;
+    authenticating: string;
+    securityFooter: string;
+    districtTools: string;
+  }
+> = {
+  en: {
+    apPoliceEn: 'ANDHRA PRADESH STATE POLICE',
+    apPoliceTe: 'ఆంధ్రప్రదేశ్ రాష్ట్ర పోలీస్',
+    portalSubtitle: 'EMERGENCY OPERATIONS PORTAL',
+    secureAccess: 'Secure Access',
+    authorizedOnly: 'Authorized Personnel Only',
+    connectionMode: 'Connection Mode',
+    districtNode: 'District Node',
+    districtSub: 'Local (Offline) Network',
+    stateCloud: 'State Cloud',
+    stateSub: 'Online (Central) Access',
+    emailPlaceholderCloud: 'Official Email (e.g., name@ap.gov.in)',
+    emailPlaceholderLocal: 'Badge ID or Email (e.g., p1 / admin)',
+    passwordPlaceholder: 'Password',
+    rememberDevice: 'Remember this device',
+    forgotPassword: 'Forgot Password?',
+    secureLogin: 'Secure Login',
+    authenticating: 'Authenticating...',
+    securityFooter: 'Protected with end-to-end encryption and government-grade security.',
+    districtTools: 'District Node Tools & Server IP'
+  },
+  te: {
+    apPoliceEn: 'ANDHRA PRADESH STATE POLICE',
+    apPoliceTe: 'ఆంధ్రప్రదేశ్ రాష్ట్ర పోలీస్',
+    portalSubtitle: 'అత్యవసర కార్యకలాపాల పోర్టల్',
+    secureAccess: 'సురక్షిత ప్రవేశం',
+    authorizedOnly: 'అధికారిక సిబ్బందికి మాత్రమే',
+    connectionMode: 'కనెక్షన్ విధానం',
+    districtNode: 'జిల్లా నోడ్',
+    districtSub: 'స్థానిక (ఆఫ్‌లైన్) నెట్‌వర్క్',
+    stateCloud: 'రాష్ట్ర క్లౌడ్',
+    stateSub: 'ఆన్‌లైన్ (కేంద్ర) యాక్సెస్',
+    emailPlaceholderCloud: 'అధికారిక ఇమెయిల్ (ఉదా: name@ap.gov.in)',
+    emailPlaceholderLocal: 'బ్యాడ్జ్ కోడ్ లేదా ఇమెయిల్ (ఉదా: p1 / admin)',
+    passwordPlaceholder: 'పాస్‌వర్డ్',
+    rememberDevice: 'ఈ పరికరాన్ని గుర్తుంచుకోండి',
+    forgotPassword: 'పాస్‌వర్డ్ మర్చిపోయారా?',
+    secureLogin: 'సురక్షిత లాగిన్',
+    authenticating: 'ధృవీకరిస్తోంది...',
+    securityFooter: 'ఎండ్-టు-ఎండ్ ఎన్‌క్రిప్షన్ మరియు ప్రభుత్వ స్థాయి భద్రతతో రక్షించబడింది.',
+    districtTools: 'జిల్లా నోడ్ టూల్స్ & సర్వర్ IP'
+  }
+};
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, isAuthenticated, user, isLoading } = useAuth();
-  
+
   const [badgeNumber, setBadgeNumber] = useState<string>('');
   const [pin, setPin] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [rememberDevice, setRememberDevice] = useState<boolean>(false);
+  const [language, setLanguage] = useState<LoginLanguage>('en');
+  const [theme, setTheme] = useState<ThemeMode>('light');
   const [error, setError] = useState<string | null>(null);
-  const [activeField, setActiveField] = useState<'badge' | 'pin'>('badge');
+  const [infoNotice, setInfoNotice] = useState<string | null>(null);
+
+  // NFC simulation & forgot password modal state
   const [isNfcScanning, setIsNfcScanning] = useState<boolean>(false);
   const [scanSuccess, setScanSuccess] = useState<boolean>(false);
-  
-  // Server IP custom overrides & Cloud Mode toggle
-  const [showServerIpConfig, setShowServerIpConfig] = useState<boolean>(false);
+  const [showForgotModal, setShowForgotModal] = useState<boolean>(false);
+  const [resetEmail, setResetEmail] = useState<string>('');
+  const [resetStatus, setResetStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [resetSubmitting, setResetSubmitting] = useState<boolean>(false);
+
+  // District Node IP override & connection tools
+  const [showDistrictTools, setShowDistrictTools] = useState<boolean>(false);
+  const [showModeInfo, setShowModeInfo] = useState<boolean>(false);
   const [customIp, setCustomIp] = useState<string>('');
   const [ipSavedMessage, setIpSavedMessage] = useState<string>('');
   const [connectionMode, setConnectionMode] = useState<'local' | 'cloud'>('local');
   const [cloudReady, setCloudReady] = useState<boolean>(false);
 
+  const t = COPY[language];
+  const isDark = theme === 'dark';
+
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setCustomIp(localStorage.getItem('tactical_server_ip') || '');
-      const configured = SupabaseStateClient.isConfigured();
-      setCloudReady(configured);
-      if (configured) {
-        setConnectionMode(SupabaseStateClient.getConnectionMode());
-      }
+    if (typeof window === 'undefined') return;
+    setCustomIp(localStorage.getItem('tactical_server_ip') || '');
+
+    const configured = SupabaseStateClient.isConfigured();
+    setCloudReady(configured);
+    if (configured) {
+      setConnectionMode(SupabaseStateClient.getConnectionMode());
+    }
+
+    const savedRemember = localStorage.getItem('hero_remember_device') === '1';
+    if (savedRemember) {
+      setRememberDevice(true);
+      const savedIdentifier = localStorage.getItem('hero_remembered_identifier');
+      if (savedIdentifier) setBadgeNumber(savedIdentifier);
+    }
+
+    const savedLang = localStorage.getItem('hero_login_lang');
+    if (savedLang === 'en' || savedLang === 'te') setLanguage(savedLang);
+
+    const savedTheme = localStorage.getItem('hero_login_theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      setTheme(savedTheme);
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    let meta = document.querySelector('meta[name="color-scheme"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'color-scheme';
+      document.head.appendChild(meta);
+    }
+    const savedTheme = (() => {
+      try {
+        return localStorage.getItem('hero_login_theme');
+      } catch {
+        return null;
+      }
+    })();
+    meta.content = savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : theme;
+  }, [theme]);
+
+  const handleLanguageChange = (nextLang: LoginLanguage) => {
+    setLanguage(nextLang);
+    try {
+      localStorage.setItem('hero_login_lang', nextLang);
+    } catch {}
+  };
+
+  const handleToggleTheme = () => {
+    const nextTheme: ThemeMode = theme === 'light' ? 'dark' : 'light';
+    setTheme(nextTheme);
+    try {
+      const systemTheme: ThemeMode =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+      if (nextTheme === systemTheme) {
+        localStorage.removeItem('hero_login_theme');
+        const meta = document.querySelector('meta[name="color-scheme"]') as HTMLMetaElement | null;
+        if (meta) meta.content = 'light dark';
+      } else {
+        localStorage.setItem('hero_login_theme', nextTheme);
+      }
+    } catch {}
+  };
 
   const switchMode = (mode: 'local' | 'cloud') => {
     setConnectionMode(mode);
     SupabaseStateClient.setConnectionMode(mode);
     setError(null);
+    setInfoNotice(null);
   };
 
   const saveServerIp = () => {
-    if (typeof window !== 'undefined') {
-      const cleanIp = customIp.trim();
-      if (cleanIp) {
-        localStorage.setItem('tactical_server_ip', cleanIp);
-        setIpSavedMessage('✓ Server IP saved! Reloading...');
-      } else {
-        localStorage.removeItem('tactical_server_ip');
-        setIpSavedMessage('✓ Reset to Default! Reloading...');
-      }
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+    if (typeof window === 'undefined') return;
+    const cleanIp = customIp.trim();
+    if (cleanIp) {
+      localStorage.setItem('tactical_server_ip', cleanIp);
+      setIpSavedMessage('Server IP saved! Reloading...');
+    } else {
+      localStorage.removeItem('tactical_server_ip');
+      setIpSavedMessage('Reset to Default! Reloading...');
     }
+    setTimeout(() => {
+      window.location.reload();
+    }, 900);
   };
 
-  // Redirect if already logged in
+  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
       if (user.role === 'state_admin') {
@@ -71,46 +234,36 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, user, router]);
 
-  const handleKeypadPress = (val: string) => {
-    setError(null);
-    if (activeField === 'badge') {
-      if (val === 'C') {
-        setBadgeNumber('');
-      } else if (val === 'E') {
-        setActiveField('pin');
-      } else {
-        if (badgeNumber.length < 10) {
-          setBadgeNumber(prev => prev + val);
-        }
-      }
-    } else {
-      if (val === 'C') {
-        setPin('');
-      } else if (val === 'E') {
-        handleFormSubmit();
-      } else {
-        if (pin.length < 4) {
-          setPin(prev => prev + val);
-        }
-      }
-    }
-  };
-
   const handleFormSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError(null);
+    setInfoNotice(null);
 
-    if (!badgeNumber) {
-      setError('Badge Number is required.');
+    if (!badgeNumber.trim()) {
+      setError(
+        connectionMode === 'cloud'
+          ? 'Official Email is required.'
+          : 'Badge Number / User ID is required.'
+      );
       return;
     }
     if (!pin || pin.length < 4) {
-      setError('A secure passcode of at least 4 characters is required.');
+      setError('A password / passcode of at least 4 characters is required.');
       return;
     }
 
     try {
-      const loggedInUser = await login(badgeNumber, pin);
+      if (typeof window !== 'undefined') {
+        if (rememberDevice) {
+          localStorage.setItem('hero_remember_device', '1');
+          localStorage.setItem('hero_remembered_identifier', badgeNumber.trim());
+        } else {
+          localStorage.removeItem('hero_remember_device');
+          localStorage.removeItem('hero_remembered_identifier');
+        }
+      }
+
+      const loggedInUser = await login(badgeNumber.trim(), pin);
       if (loggedInUser.role === 'state_admin') {
         router.push('/admin');
       } else if (loggedInUser.role === 'dispatcher') {
@@ -119,7 +272,7 @@ export default function LoginPage() {
         router.push('/officer');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid Badge credentials or Passcode.');
+      setError(err?.message || 'Invalid credentials or passcode.');
     }
   };
 
@@ -127,9 +280,8 @@ export default function LoginPage() {
     setError(null);
     setIsNfcScanning(true);
     setScanSuccess(false);
-    
-    // Simulate badge swipe scan after 1.5 seconds
-    setTimeout(async () => {
+
+    setTimeout(() => {
       setScanSuccess(true);
       setTimeout(async () => {
         try {
@@ -141,13 +293,13 @@ export default function LoginPage() {
           } else {
             router.push('/officer');
           }
-        } catch (err: any) {
+        } catch {
           setError('NFC Badge authentication failed.');
           setIsNfcScanning(false);
           setScanSuccess(false);
         }
       }, 800);
-    }, 1500);
+    }, 1400);
   };
 
   const loadPreset = async (presetBadge: string, presetPin: string) => {
@@ -164,260 +316,711 @@ export default function LoginPage() {
         router.push('/officer');
       }
     } catch (err: any) {
-      setError(err.message || 'Preset authentication failed.');
+      setError(err?.message || 'Preset authentication failed.');
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetStatus(null);
+    const trimmed = resetEmail.trim();
+    if (!trimmed) return;
+
+    if (connectionMode === 'cloud' && cloudReady && trimmed.includes('@')) {
+      const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/$/, '');
+      const supabaseAnon = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+      if (!supabaseUrl || !supabaseAnon) {
+        setResetStatus({ ok: false, text: 'Supabase Cloud config missing in this build.' });
+        return;
+      }
+      setResetSubmitting(true);
+      try {
+        const res = await fetch(`${supabaseUrl}/auth/v1/recover`, {
+          method: 'POST',
+          headers: {
+            apikey: supabaseAnon,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email: trimmed })
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setResetStatus({
+            ok: false,
+            text: data?.msg || data?.error_description || 'Could not send reset email.'
+          });
+        } else {
+          setResetStatus({
+            ok: true,
+            text: `Recovery link dispatched to ${trimmed}. Check your official inbox.`
+          });
+        }
+      } catch {
+        setResetStatus({ ok: false, text: 'Network error contacting State Cloud Auth.' });
+      } finally {
+        setResetSubmitting(false);
+      }
+    } else {
+      setResetStatus({
+        ok: true,
+        text: 'Offline District Node PINs are managed by your District HQ Dispatcher or State Command Admin.'
+      });
     }
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-slate-50 via-sky-50/30 to-slate-100 relative min-h-screen font-sans text-slate-800">
-      {/* Dynamic India Tricolor Accent Line at the very top */}
-      <div className="absolute top-0 left-0 right-0 h-1.5 flex z-20">
-        <div className="flex-1 bg-[#FF9933] shadow-[0_0_12px_rgba(255,153,51,0.4)]" />
-        <div className="flex-1 bg-white shadow-[0_0_12px_rgba(255,255,255,0.4)]" />
-        <div className="flex-1 bg-[#138808] shadow-[0_0_12px_rgba(19,136,8,0.4)]" />
-      </div>
+    <div
+      className={`min-h-screen flex flex-col font-sans overflow-x-hidden transition-colors duration-200 ${
+        isDark ? 'bg-[#07152B] text-slate-100' : 'bg-[#F4F7FB] text-[#0B2348]'
+      }`}
+    >
+      {/* Top Government Branding Header */}
+      <header
+        className={`w-full border-b px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-3 z-20 ${
+          isDark
+            ? 'bg-[#0B1C38] border-slate-700/80 text-white'
+            : 'bg-white border-[#DCE3ED] text-[#0B2348]'
+        }`}
+      >
+        {/* Header Left */}
+        <div className="flex items-center gap-3 min-w-0">
+          <img
+            src="/ap-police-crest.png"
+            alt="Andhra Pradesh State Police Logo"
+            className="h-10 sm:h-11 w-auto object-contain flex-shrink-0 rounded-md"
+          />
 
-      {/* Tactical grid background mesh */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.04] bg-[radial-gradient(circle_at_center,#94a3b8_1.5px,transparent_1.5px)] bg-[size:32px_32px]" />
-      
-      {/* Modern ambient glow spots */}
-      <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-sky-500/5 rounded-full blur-[100px] pointer-events-none animate-pulse" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none animate-pulse" />
+          <div
+            className={`h-8 w-px flex-shrink-0 ${isDark ? 'bg-slate-700' : 'bg-[#DCE3ED]'}`}
+            aria-hidden="true"
+          />
 
-      {/* Main glassmorphic login card */}
-      <div className="w-full max-w-[430px] bg-white/80 border border-slate-200 rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.1)] p-8 z-10 backdrop-blur-xl transition-all duration-300">
-        
-        {/* AP Police Logo & Branding Header */}
-        <div className="flex flex-col items-center text-center mb-7">
-          <div className="bg-white p-2.5 rounded-2xl border-2 border-amber-500/30 shadow-[0_8px_25px_rgba(245,158,11,0.1)] mb-4 relative group">
-            <span className="absolute -inset-0.5 rounded-2xl bg-gradient-to-tr from-amber-500/15 to-sky-500/15 blur opacity-60 group-hover:opacity-100 transition duration-1000" />
-            <img 
-              src="/ap-police-logo.png" 
-              className="w-18 h-18 object-contain relative z-10 animate-fadeIn" 
-              alt="Andhra Pradesh Police Logo" 
-            />
+          <div className="min-w-0">
+            <div className="text-[11px] sm:text-xs font-extrabold tracking-wide uppercase leading-tight truncate">
+              {t.apPoliceEn}
+            </div>
+            <div
+              className={`text-[11px] font-semibold leading-tight mt-0.5 truncate ${
+                isDark ? 'text-slate-300' : 'text-[#53627A]'
+              }`}
+            >
+              {t.apPoliceTe}
+            </div>
           </div>
-          
-          <h1 className="text-lg font-black text-slate-800 tracking-tight leading-none uppercase font-sans">
-            HERO – Hybrid Emergency Response & Operations
-          </h1>
-          <span className="text-[10px] text-slate-500 font-extrabold mt-1.5 block uppercase tracking-widest leading-none">
-            ఆంధ్రప్రదేశ్ రాష్ట్ర పోలీస్ / AP State Police Portal
-          </span>
-          
-          <div className="mt-3.5 flex items-center gap-1.5 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-full text-[9px] font-mono font-bold text-slate-500 shadow-inner">
-            <RadioTower className="w-3.5 h-3.5 text-sky-500 animate-pulse" />
-            <span>SECURE OFFLINE MESHNET LINK</span>
+
+          <div className="hidden md:flex items-center gap-3 pl-1 flex-shrink-0">
+            <div className={`h-8 w-px ${isDark ? 'bg-slate-700' : 'bg-[#DCE3ED]'}`} aria-hidden="true" />
+            <div className="w-[3px] h-7 bg-[#E5242A] rounded-full" aria-hidden="true" />
+            <div>
+              <div className="text-sm font-black tracking-tight leading-none">HERO</div>
+              <div
+                className={`text-[10px] font-bold tracking-wider uppercase mt-0.5 leading-none ${
+                  isDark ? 'text-slate-300' : 'text-[#53627A]'
+                }`}
+              >
+                {t.portalSubtitle}
+              </div>
+            </div>
           </div>
         </div>
 
-        <form onSubmit={handleFormSubmit} className="space-y-4">
-          {cloudReady && (
-            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200">
-              <button
-                type="button"
-                onClick={() => switchMode('local')}
-                className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition ${
-                  connectionMode === 'local' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <RadioTower className="w-3.5 h-3.5" />
-                District Node (:5001)
-              </button>
-              <button
-                type="button"
-                onClick={() => switchMode('cloud')}
-                className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition ${
-                  connectionMode === 'cloud' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                State Cloud (Supabase)
-              </button>
-            </div>
-          )}
+        {/* Header Right: Language Selector + Theme Toggle */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => handleLanguageChange('en')}
+            aria-pressed={language === 'en'}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition ${
+              language === 'en'
+                ? isDark
+                  ? 'bg-slate-800 border-sky-400 text-white'
+                  : 'bg-[#F8FAFD] border-[#1557A6] text-[#0B2348]'
+                : isDark
+                  ? 'bg-slate-900/60 border-slate-700 text-slate-300 hover:bg-slate-800'
+                  : 'bg-white border-[#DCE3ED] text-[#53627A] hover:bg-slate-50'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>English</span>
+            <ChevronDown className="w-3 h-3 opacity-60 hidden sm:inline" aria-hidden="true" />
+          </button>
 
-          {/* Inputs Section */}
-          <div className="space-y-3">
-            <div className="p-3.5 border border-slate-200 bg-slate-50 rounded-2xl focus-within:border-sky-500 focus-within:bg-sky-50 focus-within:shadow-[0_0_15px_rgba(14,165,233,0.1)] transition-all duration-200">
-              <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
-                {connectionMode === 'cloud' ? 'State Admin Email' : 'Badge / User ID Code'}
-              </label>
-              <div className="flex items-center gap-3">
-                <Shield className="w-4 h-4 text-slate-400 focus-within:text-sky-600" />
-                <input
-                  type={connectionMode === 'cloud' ? 'email' : 'text'}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  placeholder={connectionMode === 'cloud' ? 'admin@herolab.in' : 'e.g. p1'}
-                  value={badgeNumber}
-                  onChange={(e) => setBadgeNumber(e.target.value)}
-                  className="w-full bg-transparent border-none outline-none text-base font-black font-mono text-slate-800 placeholder-slate-400 tracking-wider"
-                  required
-                />
-              </div>
-            </div>
+          <button
+            type="button"
+            onClick={() => handleLanguageChange('te')}
+            aria-pressed={language === 'te'}
+            className={`px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition ${
+              language === 'te'
+                ? isDark
+                  ? 'bg-slate-800 border-sky-400 text-white'
+                  : 'bg-[#EAF2FC] border-[#1557A6] text-[#0B2348]'
+                : isDark
+                  ? 'bg-slate-900/60 border-slate-700 text-slate-300 hover:bg-slate-800'
+                  : 'bg-white border-[#DCE3ED] text-[#53627A] hover:bg-slate-50'
+            }`}
+          >
+            తెలుగు
+          </button>
 
-            <div className="p-3.5 border border-slate-200 bg-slate-50 rounded-2xl focus-within:border-sky-500 focus-within:bg-sky-50 focus-within:shadow-[0_0_15px_rgba(14,165,233,0.1)] transition-all duration-200">
-              <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
-                {connectionMode === 'cloud' ? 'Supabase Password' : 'Secure Passcode PIN'}
-              </label>
-              <div className="flex items-center gap-3">
-                <Key className="w-4 h-4 text-slate-400 focus-within:text-sky-600" />
-                <input
-                  type="password"
-                  placeholder={connectionMode === 'cloud' ? '••••••••' : 'e.g. police'}
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  className="w-full bg-transparent border-none outline-none text-base font-black font-mono text-slate-800 placeholder-slate-400 tracking-wider"
-                  required
-                />
-              </div>
-            </div>
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+            title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+            className={`p-2 rounded-lg border cursor-pointer transition ${
+              isDark
+                ? 'bg-slate-800 border-slate-600 text-amber-300 hover:bg-slate-700'
+                : 'bg-white border-[#DCE3ED] text-[#0B2348] hover:bg-slate-50'
+            }`}
+          >
+            {isDark ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+          </button>
+        </div>
+      </header>
+
+      {/* Main Split Stage with Official HERO_BG Artwork */}
+      <main className="relative flex-1 flex flex-col lg:flex-row items-center justify-center lg:justify-end px-4 py-6 sm:px-8 lg:px-14 xl:px-20">
+        {/* Desktop & Tablet Primary Background (Unmodified HERO_BG) */}
+        <div
+          aria-hidden="true"
+          className="hidden lg:block absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url('/hero-bg.png')" }}
+        />
+        {isDark && (
+          <div
+            aria-hidden="true"
+            className="hidden lg:block absolute inset-0 bg-[#07152B]/45 pointer-events-none"
+          />
+        )}
+
+        {/* Mobile / Compact Tablet Hero Strip using HERO_BG */}
+        <div className="lg:hidden w-full max-w-[460px] mb-5 rounded-2xl overflow-hidden border border-[#DCE3ED] shadow-md bg-white">
+          <div className="relative w-full aspect-[16/9]">
+            <img
+              src="/hero-bg.png"
+              alt="HERO Hybrid Emergency Response and Operations"
+              className="w-full h-full object-cover object-left"
+            />
           </div>
+        </div>
 
-          {/* Error message card */}
-          {error && (
-            <div className="p-3 border border-red-200 bg-red-50 text-red-600 font-sans text-xs text-center rounded-2xl font-bold flex items-center justify-center gap-2 animate-shake">
-              <Lock className="w-4 h-4 flex-shrink-0 text-red-500" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Submissions Section */}
-          <div className="flex flex-col gap-2.5 pt-3 border-t border-slate-200">
-            <TacticalButton
-              type="submit"
-              variant="primary"
-              glow
-              className="w-full text-xs py-3 rounded-2xl shadow-lg bg-gradient-to-r from-sky-600 to-sky-700 hover:from-sky-550 hover:to-sky-650 text-white font-extrabold uppercase tracking-wider cursor-pointer"
-              disabled={isLoading || isNfcScanning}
+        {/* Right Side Login Card – Secure Access */}
+        <section
+          aria-label="Secure Login"
+          className={`relative z-10 w-full max-w-[440px] rounded-2xl border p-6 sm:p-7 transition-colors ${
+            isDark
+              ? 'bg-[#0D2140]/95 border-slate-700 text-white shadow-[0_24px_60px_-12px_rgba(0,0,0,0.6)] backdrop-blur-md'
+              : 'bg-white/95 border-[#DCE3ED] text-[#0B2348] shadow-[0_24px_60px_-12px_rgba(11,35,72,0.18)] backdrop-blur-md'
+          }`}
+        >
+          {/* Card Heading */}
+          <div className="flex items-center gap-3.5 pb-4">
+            <div
+              className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+                isDark
+                  ? 'bg-[#15315B] border-slate-600 text-sky-300'
+                  : 'bg-[#EAF2FC] border-[#DCE3ED] text-[#0B2348]'
+              }`}
             >
-              {isLoading ? (
-                <div className="flex items-center justify-center gap-2">
-                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                  <span>DECRYPTING AUTHORIZATION...</span>
-                </div>
-              ) : (
-                'SECURE LOG IN'
-              )}
-            </TacticalButton>
-
-            {connectionMode === 'local' && (
-              <button
-                type="button"
-                onClick={triggerNfcSimulation}
-                className="w-full text-[11px] font-extrabold text-slate-500 hover:text-slate-700 py-2.5 border border-slate-200 hover:border-slate-300 bg-slate-50 active:scale-98 transition rounded-2xl flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                disabled={isLoading || isNfcScanning}
-              >
-                <Smartphone className={`w-3.5 h-3.5 ${isNfcScanning ? 'text-sky-400 animate-bounce' : 'text-slate-500'}`} />
-                <span>{isNfcScanning ? 'SCANNING CONTACTLESS BADGE...' : 'SIMULATE BADGE SCAN'}</span>
-              </button>
-            )}
+              <Lock className="w-5 h-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h1 className="text-xl font-extrabold tracking-tight leading-tight">
+                {t.secureAccess}
+              </h1>
+              <p className={`text-xs font-medium mt-0.5 ${isDark ? 'text-slate-300' : 'text-[#53627A]'}`}>
+                {t.authorizedOnly}
+              </p>
+            </div>
           </div>
 
-          {/* Preset Bypass Presets (Local District Node only) */}
-          {connectionMode === 'local' && (
-            <div className="pt-4 border-t border-slate-200 flex flex-col gap-2">
-              <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider text-center">
-                SYSTEM BYPASS PRESETS
-              </span>
+          {/* Thin divider with emergency red accent */}
+          <div className={`relative h-px w-full mb-5 ${isDark ? 'bg-slate-700' : 'bg-[#DCE3ED]'}`}>
+            <span className="absolute left-0 top-0 h-[2px] w-8 bg-[#E5242A] rounded-full -translate-y-[0.5px]" />
+          </div>
+
+          <form onSubmit={handleFormSubmit} className="space-y-4">
+            {/* Connection Mode Selector */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold">{t.connectionMode}</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowModeInfo(!showModeInfo)}
+                    aria-label="Connection mode details"
+                    className={`p-0.5 rounded-full cursor-pointer ${
+                      isDark ? 'text-slate-400 hover:text-white' : 'text-[#53627A] hover:text-[#0B2348]'
+                    }`}
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {showModeInfo && (
+                <p
+                  className={`text-[11px] mb-2 p-2.5 rounded-lg border leading-relaxed ${
+                    isDark
+                      ? 'bg-slate-800/80 border-slate-700 text-slate-300'
+                      : 'bg-[#F4F8FD] border-[#DCE3ED] text-[#53627A]'
+                  }`}
+                >
+                  Use <strong>District Node</strong> for local offline/LAN mesh terminals (:5001) or{' '}
+                  <strong>State Cloud</strong> for centralized Supabase access.
+                </p>
+              )}
+
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
-                  onClick={() => loadPreset('state_admin', 'police')}
-                  className="font-sans text-[9px] py-2 border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-700 rounded-xl font-bold transition cursor-pointer text-center shadow-sm"
+                  onClick={() => switchMode('local')}
+                  aria-pressed={connectionMode === 'local'}
+                  className={`relative flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                    connectionMode === 'local'
+                      ? isDark
+                        ? 'border-sky-400 bg-[#15315B] text-white'
+                        : 'border-[#1557A6] bg-[#EAF2FC] text-[#0B2348]'
+                      : isDark
+                        ? 'border-slate-700 bg-slate-900/50 text-slate-300 hover:bg-slate-800'
+                        : 'border-[#DCE3ED] bg-white text-[#53627A] hover:bg-slate-50'
+                  }`}
                 >
-                  STATE ADMIN
+                  <RadioTower
+                    className={`w-4 h-4 flex-shrink-0 ${
+                      connectionMode === 'local'
+                        ? isDark
+                          ? 'text-sky-300'
+                          : 'text-[#1557A6]'
+                        : 'opacity-70'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 pr-3">
+                    <div className="text-xs font-bold leading-tight truncate">{t.districtNode}</div>
+                    <div className="text-[10px] opacity-80 leading-tight mt-0.5 truncate">
+                      {t.districtSub}
+                    </div>
+                  </div>
+                  {connectionMode === 'local' && (
+                    <span
+                      className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[#1557A6] text-white flex items-center justify-center"
+                      aria-hidden="true"
+                    >
+                      <Check className="w-2.5 h-2.5 stroke-[3]" />
+                    </span>
+                  )}
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => loadPreset('admin', 'police')}
-                  className="font-sans text-[9px] py-2 border border-slate-200 hover:border-sky-300 bg-slate-50 hover:bg-sky-50 text-slate-500 hover:text-sky-600 rounded-xl font-bold transition cursor-pointer text-center shadow-sm"
+                  onClick={() => switchMode('cloud')}
+                  aria-pressed={connectionMode === 'cloud'}
+                  className={`relative flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                    connectionMode === 'cloud'
+                      ? isDark
+                        ? 'border-sky-400 bg-[#15315B] text-white'
+                        : 'border-[#1557A6] bg-[#EAF2FC] text-[#0B2348]'
+                      : isDark
+                        ? 'border-slate-700 bg-slate-900/50 text-slate-300 hover:bg-slate-800'
+                        : 'border-[#DCE3ED] bg-white text-[#53627A] hover:bg-slate-50'
+                  }`}
                 >
-                  DISTRICT HQ
+                  <Cloud
+                    className={`w-4 h-4 flex-shrink-0 ${
+                      connectionMode === 'cloud'
+                        ? isDark
+                          ? 'text-sky-300'
+                          : 'text-[#1557A6]'
+                        : 'opacity-70'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 pr-3">
+                    <div className="text-xs font-bold leading-tight truncate">{t.stateCloud}</div>
+                    <div className="text-[10px] opacity-80 leading-tight mt-0.5 truncate">
+                      {t.stateSub}
+                    </div>
+                  </div>
+                  {connectionMode === 'cloud' && (
+                    <span
+                      className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[#1557A6] text-white flex items-center justify-center"
+                      aria-hidden="true"
+                    >
+                      <Check className="w-2.5 h-2.5 stroke-[3]" />
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
-          )}
 
-          {/* Server Connection settings section (Local mode only) */}
-          {connectionMode === 'local' && (
-          <div className="pt-3 border-t border-slate-250 flex flex-col gap-1.5">
-            <button
-              type="button"
-              onClick={() => setShowServerIpConfig(!showServerIpConfig)}
-              className="text-[9px] text-slate-400 font-extrabold hover:text-slate-650 flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer py-1"
-            >
-              <Settings className="w-3 h-3 text-slate-400 animate-pulse" />
-              <span>{showServerIpConfig ? 'Hide Connection Settings' : 'Connection Settings'}</span>
-            </button>
-            
-            {showServerIpConfig && (
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 text-left">
-                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block">
-                  Tactical Server IP Address
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="e.g. 192.168.0.103"
-                    value={customIp}
-                    onChange={(e) => setCustomIp(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 focus:outline-none focus:border-sky-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={saveServerIp}
-                    className="px-3 py-2 bg-sky-600 text-white text-[10px] font-black uppercase rounded-xl hover:bg-sky-700 active:scale-95 cursor-pointer transition-all"
-                  >
-                    Save
-                  </button>
-                </div>
-                {ipSavedMessage && (
-                  <span className="text-[8px] font-bold text-emerald-600 uppercase block tracking-wider">
-                    {ipSavedMessage}
-                  </span>
-                )}
-                <span className="text-[8px] text-slate-400 font-bold block leading-relaxed">
-                  Default (Auto): {typeof window !== 'undefined' ? window.location.hostname : 'localhost'}
-                </span>
+            {/* Email / Badge Identifier Input */}
+            <div>
+              <label htmlFor="hero-login-identifier" className="sr-only">
+                {connectionMode === 'cloud' ? 'Official Email' : 'Badge Number or Official Email'}
+              </label>
+              <div
+                className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border transition ${
+                  isDark
+                    ? 'bg-slate-900/70 border-slate-700 focus-within:border-sky-400'
+                    : 'bg-white border-[#DCE3ED] focus-within:border-[#1557A6] focus-within:ring-2 focus-within:ring-[#EAF2FC]'
+                }`}
+              >
+                <Mail
+                  className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-slate-400' : 'text-[#53627A]'}`}
+                  aria-hidden="true"
+                />
+                <input
+                  id="hero-login-identifier"
+                  name="email"
+                  type={connectionMode === 'cloud' ? 'email' : 'text'}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="next"
+                  placeholder={
+                    connectionMode === 'cloud' ? t.emailPlaceholderCloud : t.emailPlaceholderLocal
+                  }
+                  value={badgeNumber}
+                  onChange={(e) => setBadgeNumber(e.target.value)}
+                  className={`w-full bg-transparent border-none outline-none text-sm font-medium ${
+                    isDark
+                      ? 'text-white placeholder-slate-400'
+                      : 'text-[#0B2348] placeholder-[#53627A]/80'
+                  }`}
+                  required
+                />
+              </div>
+            </div>
 
-                <div className="text-[9px] text-slate-500 leading-relaxed bg-amber-50/50 border border-amber-200 p-2.5 rounded-xl mt-2 font-sans space-y-1">
-                  <span className="font-extrabold text-amber-700 uppercase block tracking-wide">💡 Local Network Connection Guide:</span>
-                  <p>1. Ensure both phone and laptop are on the <b>same Wi-Fi</b> (e.g. Jio router).</p>
-                  <p>2. Disable <b>Mobile Data / Cellular</b> on your phone so it routes locally.</p>
-                  <p>3. If Android warns "No internet", select <b>"Keep Connected"</b>.</p>
-                </div>
+            {/* Password Input + Visibility Toggle */}
+            <div>
+              <label htmlFor="hero-login-password" className="sr-only">
+                Password
+              </label>
+              <div
+                className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border transition ${
+                  isDark
+                    ? 'bg-slate-900/70 border-slate-700 focus-within:border-sky-400'
+                    : 'bg-white border-[#DCE3ED] focus-within:border-[#1557A6] focus-within:ring-2 focus-within:ring-[#EAF2FC]'
+                }`}
+              >
+                <Lock
+                  className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-slate-400' : 'text-[#53627A]'}`}
+                  aria-hidden="true"
+                />
+                <input
+                  id="hero-login-password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  enterKeyHint="done"
+                  placeholder={t.passwordPlaceholder}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  className={`w-full bg-transparent border-none outline-none text-sm font-medium ${
+                    isDark
+                      ? 'text-white placeholder-slate-400'
+                      : 'text-[#0B2348] placeholder-[#53627A]/80'
+                  }`}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  className={`p-1 rounded-md cursor-pointer transition ${
+                    isDark ? 'text-slate-400 hover:text-white' : 'text-[#53627A] hover:text-[#0B2348]'
+                  }`}
+                >
+                  {showPassword ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Remember Device & Forgot Password */}
+            <div className="flex items-center justify-between text-xs pt-0.5">
+              <label
+                htmlFor="hero-remember-device"
+                className={`inline-flex items-center gap-2 cursor-pointer select-none font-medium ${
+                  isDark ? 'text-slate-300' : 'text-[#53627A]'
+                }`}
+              >
+                <input
+                  id="hero-remember-device"
+                  type="checkbox"
+                  checked={rememberDevice}
+                  onChange={(e) => setRememberDevice(e.target.checked)}
+                  className="w-4 h-4 rounded border-[#DCE3ED] accent-[#1557A6] cursor-pointer"
+                />
+                <span>{t.rememberDevice}</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setResetEmail(badgeNumber.includes('@') ? badgeNumber : '');
+                  setResetStatus(null);
+                  setShowForgotModal(true);
+                }}
+                className={`font-semibold cursor-pointer hover:underline ${
+                  isDark ? 'text-sky-300' : 'text-[#1557A6]'
+                }`}
+              >
+                {t.forgotPassword}
+              </button>
+            </div>
+
+            {/* Error / Info Feedback */}
+            {error && (
+              <div
+                role="alert"
+                className="p-3 rounded-xl border border-red-200 bg-red-50 text-[#E5242A] text-xs font-semibold flex items-center gap-2"
+              >
+                <Lock className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+                <span>{error}</span>
               </div>
             )}
+
+            {infoNotice && (
+              <div className="p-3 rounded-xl border border-sky-200 bg-[#EAF2FC] text-[#0B2348] text-xs font-semibold">
+                {infoNotice}
+              </div>
+            )}
+
+            {/* Primary Secure Login CTA */}
+            <button
+              type="submit"
+              disabled={isLoading || isNfcScanning}
+              className="w-full py-3 px-4 rounded-xl bg-[#0B2348] hover:bg-[#1557A6] disabled:opacity-60 text-white font-bold text-sm flex items-center justify-between shadow-md cursor-pointer transition active:scale-[0.99]"
+            >
+              <span className="w-4" aria-hidden="true" />
+              <span className="inline-flex items-center gap-2">
+                {isLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    <span>{t.authenticating}</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4" aria-hidden="true" />
+                    <span>{t.secureLogin}</span>
+                  </>
+                )}
+              </span>
+              <ArrowRight className="w-4 h-4" aria-hidden="true" />
+            </button>
+
+            {/* Security Footer */}
+            <div
+              className={`rounded-xl border px-3.5 py-2.5 flex items-center gap-3 text-xs ${
+                isDark
+                  ? 'bg-slate-900/60 border-slate-700 text-slate-300'
+                  : 'bg-[#F4F8FD] border-[#DCE3ED] text-[#53627A]'
+              }`}
+            >
+              <ShieldCheck
+                className={`w-5 h-5 flex-shrink-0 ${isDark ? 'text-sky-300' : 'text-[#0B2348]'}`}
+                aria-hidden="true"
+              />
+              <span className="leading-snug">{t.securityFooter}</span>
+            </div>
+
+            {/* District Node Local Tools & Server Config (Preserved cleanly under District Node mode) */}
+            {connectionMode === 'local' && (
+              <div className={`pt-2 border-t ${isDark ? 'border-slate-700' : 'border-[#DCE3ED]'}`}>
+                <button
+                  type="button"
+                  onClick={() => setShowDistrictTools(!showDistrictTools)}
+                  className={`w-full flex items-center justify-between text-[11px] font-bold py-1 cursor-pointer ${
+                    isDark ? 'text-slate-300 hover:text-white' : 'text-[#53627A] hover:text-[#0B2348]'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Settings className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{t.districtTools}</span>
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform ${showDistrictTools ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+
+                {showDistrictTools && (
+                  <div
+                    className={`mt-2 p-3 rounded-xl border space-y-3 text-xs ${
+                      isDark ? 'bg-slate-900/70 border-slate-700' : 'bg-[#F4F8FD] border-[#DCE3ED]'
+                    }`}
+                  >
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => loadPreset('state_admin', 'police')}
+                        className="py-1.5 px-2 rounded-lg border border-[#DCE3ED] bg-white hover:bg-[#EAF2FC] text-[#0B2348] text-[10px] font-bold uppercase cursor-pointer"
+                      >
+                        State Admin
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => loadPreset('admin', 'police')}
+                        className="py-1.5 px-2 rounded-lg border border-[#DCE3ED] bg-white hover:bg-[#EAF2FC] text-[#0B2348] text-[10px] font-bold uppercase cursor-pointer"
+                      >
+                        District HQ
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={triggerNfcSimulation}
+                      disabled={isLoading || isNfcScanning}
+                      className="w-full py-1.5 px-2.5 rounded-lg border border-[#DCE3ED] bg-white hover:bg-[#EAF2FC] text-[#0B2348] text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Smartphone className="w-3.5 h-3.5 text-[#1557A6]" aria-hidden="true" />
+                      <span>Simulate Contactless Badge Scan</span>
+                    </button>
+
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="tactical-server-ip"
+                        className="text-[10px] font-bold uppercase tracking-wider block opacity-80"
+                      >
+                        Tactical Server IP Address
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          id="tactical-server-ip"
+                          type="text"
+                          placeholder="e.g. 192.168.0.103"
+                          value={customIp}
+                          onChange={(e) => setCustomIp(e.target.value)}
+                          className="flex-1 px-2.5 py-1.5 bg-white border border-[#DCE3ED] rounded-lg text-xs font-mono text-[#0B2348] focus:outline-none focus:border-[#1557A6]"
+                        />
+                        <button
+                          type="button"
+                          onClick={saveServerIp}
+                          className="px-3 py-1.5 bg-[#1557A6] hover:bg-[#0B2348] text-white text-[10px] font-bold uppercase rounded-lg cursor-pointer"
+                        >
+                          Save
+                        </button>
+                      </div>
+                      {ipSavedMessage && (
+                        <span className="text-[10px] font-bold text-emerald-600 block">
+                          {ipSavedMessage}
+                        </span>
+                      )}
+                      <span className="text-[10px] opacity-75 block">
+                        Default (Auto): {typeof window !== 'undefined' ? window.location.hostname : 'localhost'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </form>
+        </section>
+      </main>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="forgot-password-title"
+          className="fixed inset-0 bg-[#0B2348]/45 backdrop-blur-xs z-40 flex items-center justify-center p-4"
+        >
+          <div
+            className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl space-y-4 ${
+              isDark ? 'bg-[#0D2140] border-slate-700 text-white' : 'bg-white border-[#DCE3ED] text-[#0B2348]'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <h2 id="forgot-password-title" className="text-base font-extrabold">
+                Password Recovery
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(false)}
+                aria-label="Close password recovery"
+                className="p-1 rounded-lg hover:bg-slate-100 text-[#53627A] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleForgotPasswordSubmit} className="space-y-3 text-xs">
+              <p className={isDark ? 'text-slate-300' : 'text-[#53627A]'}>
+                {connectionMode === 'cloud'
+                  ? 'Enter your official State Cloud email to receive a password reset link.'
+                  : 'For offline District Node credentials, enter your badge/email or contact your District HQ Dispatcher.'}
+              </p>
+              <input
+                type="text"
+                required
+                placeholder="name@ap.gov.in or badge ID"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-700 text-white focus:border-sky-400'
+                    : 'bg-white border-[#DCE3ED] text-[#0B2348] focus:border-[#1557A6]'
+                }`}
+              />
+              {resetStatus && (
+                <div
+                  className={`p-2.5 rounded-xl border text-xs font-semibold ${
+                    resetStatus.ok
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-red-50 border-red-200 text-[#E5242A]'
+                  }`}
+                >
+                  {resetStatus.text}
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotModal(false)}
+                  className="px-4 py-2 rounded-xl border border-[#DCE3ED] text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetSubmitting}
+                  className="px-4 py-2 rounded-xl bg-[#0B2348] hover:bg-[#1557A6] text-white text-xs font-bold cursor-pointer disabled:opacity-60"
+                >
+                  {resetSubmitting ? 'Sending...' : 'Request Reset'}
+                </button>
+              </div>
+            </form>
           </div>
-          )}
+        </div>
+      )}
 
-        </form>
-      </div>
-
-      {/* NFC Scan Simulation overlay */}
+      {/* NFC Scan Simulation Overlay */}
       {isNfcScanning && (
-        <div className="absolute inset-0 bg-white/80 backdrop-blur-md z-30 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 w-full max-w-[340px] text-center shadow-2xl flex flex-col items-center gap-4 animate-scaleUp">
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-md z-40 flex items-center justify-center p-4">
+          <div className="bg-white border border-[#DCE3ED] rounded-2xl p-6 w-full max-w-[340px] text-center shadow-2xl flex flex-col items-center gap-4 text-[#0B2348]">
             {scanSuccess ? (
-              <div className="bg-emerald-50 text-emerald-600 p-4 rounded-full border border-emerald-200 animate-bounce">
+              <div className="bg-emerald-50 text-emerald-600 p-4 rounded-full border border-emerald-200">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
             ) : (
-              <div className="bg-sky-50 text-sky-600 p-4 rounded-full border border-sky-200 relative">
+              <div className="bg-[#EAF2FC] text-[#1557A6] p-4 rounded-full border border-[#DCE3ED] relative">
                 <Smartphone className="w-10 h-10 animate-pulse" />
-                <span className="absolute -inset-1.5 border border-sky-400/40 rounded-full animate-ping" />
+                <span className="absolute -inset-1.5 border border-[#1557A6]/40 rounded-full animate-ping" />
               </div>
             )}
             <div>
-              <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-wide">
+              <h3 className="font-extrabold text-sm uppercase tracking-wide">
                 {scanSuccess ? 'Decryption Success' : 'Badge Scanning'}
               </h3>
-              <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
-                {scanSuccess ? 'Badge key verified. Redirecting...' : 'Hold your police smart card against the screen reader...'}
+              <p className="text-xs text-[#53627A] leading-relaxed mt-1">
+                {scanSuccess
+                  ? 'Badge key verified. Redirecting...'
+                  : 'Hold your police smart card against the screen reader...'}
               </p>
             </div>
           </div>

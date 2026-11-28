@@ -18,6 +18,15 @@
 :root {
   --background: #F8FAFC;
   --foreground: #0F172A;
+  color-scheme: light dark;
+
+  &:has(> head > meta[name="color-scheme"][content="dark"]) {
+    color-scheme: dark;
+  }
+
+  &:has(> head > meta[name="color-scheme"][content="light"]) {
+    color-scheme: light;
+  }
 }
 
 body {
@@ -26,7 +35,6 @@ body {
   font-family: var(--font-sans);
   overflow-x: hidden;
   accent-color: #0284c7;
-  color-scheme: light;
 }
 
 @supports not (accent-color: #0284c7) {
