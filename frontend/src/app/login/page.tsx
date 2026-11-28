@@ -131,28 +131,31 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    setCustomIp(localStorage.getItem('tactical_server_ip') || '');
+    const initTimer = setTimeout(() => {
+      setCustomIp(localStorage.getItem('tactical_server_ip') || '');
 
-    const configured = SupabaseStateClient.isConfigured();
-    setCloudReady(configured);
-    if (configured) {
-      setConnectionMode(SupabaseStateClient.getConnectionMode());
-    }
+      const configured = SupabaseStateClient.isConfigured();
+      setCloudReady(configured);
+      if (configured) {
+        setConnectionMode(SupabaseStateClient.getConnectionMode());
+      }
 
-    const savedRemember = localStorage.getItem('hero_remember_device') === '1';
-    if (savedRemember) {
-      setRememberDevice(true);
-      const savedIdentifier = localStorage.getItem('hero_remembered_identifier');
-      if (savedIdentifier) setBadgeNumber(savedIdentifier);
-    }
+      const savedRemember = localStorage.getItem('hero_remember_device') === '1';
+      if (savedRemember) {
+        setRememberDevice(true);
+        const savedIdentifier = localStorage.getItem('hero_remembered_identifier');
+        if (savedIdentifier) setBadgeNumber(savedIdentifier);
+      }
 
-    const savedLang = localStorage.getItem('hero_login_lang');
-    if (savedLang === 'en' || savedLang === 'te') setLanguage(savedLang);
+      const savedLang = localStorage.getItem('hero_login_lang');
+      if (savedLang === 'en' || savedLang === 'te') setLanguage(savedLang);
 
-    const savedTheme = localStorage.getItem('hero_login_theme');
-    if (savedTheme === 'light' || savedTheme === 'dark') {
-      setTheme(savedTheme);
-    }
+      const savedTheme = localStorage.getItem('hero_login_theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        setTheme(savedTheme);
+      }
+    }, 0);
+    return () => clearTimeout(initTimer);
   }, []);
 
   useEffect(() => {
@@ -271,8 +274,8 @@ export default function LoginPage() {
       } else {
         router.push('/officer');
       }
-    } catch (err: any) {
-      setError(err?.message || 'Invalid credentials or passcode.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Invalid credentials or passcode.');
     }
   };
 
@@ -315,8 +318,8 @@ export default function LoginPage() {
       } else {
         router.push('/officer');
       }
-    } catch (err: any) {
-      setError(err?.message || 'Preset authentication failed.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Preset authentication failed.');
     }
   };
 
@@ -384,11 +387,17 @@ export default function LoginPage() {
       >
         {/* Header Left */}
         <div className="flex items-center gap-3 min-w-0">
-          <img
-            src="/ap-police-crest.png"
-            alt="Andhra Pradesh State Police Logo"
-            className="h-10 sm:h-11 w-auto object-contain flex-shrink-0 rounded-md"
-          />
+          <picture className="flex-shrink-0">
+            <source srcSet="/ap-police-crest.webp" type="image/webp" />
+            <img
+              src="/ap-police-crest.png"
+              alt="Andhra Pradesh State Police Logo"
+              width={638}
+              height={391}
+              decoding="async"
+              className="h-10 sm:h-11 w-auto object-contain rounded-md"
+            />
+          </picture>
 
           <div
             className={`h-8 w-px flex-shrink-0 ${isDark ? 'bg-slate-700' : 'bg-[#DCE3ED]'}`}
@@ -480,29 +489,25 @@ export default function LoginPage() {
 
       {/* Main Split Stage with Official HERO_BG Artwork */}
       <main className="relative flex-1 flex flex-col lg:flex-row items-center justify-center lg:justify-end px-4 py-6 sm:px-8 lg:px-14 xl:px-20">
-        {/* Desktop & Tablet Primary Background (Unmodified HERO_BG) */}
-        <div
-          aria-hidden="true"
-          className="hidden lg:block absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: "url('/hero-bg.png')" }}
-        />
+        {/* Unified Single HERO_BG <picture> (Preload-scanner discoverable WebP + PNG fallback across Desktop & Mobile) */}
+        <picture className="w-full max-w-[460px] mb-5 rounded-2xl overflow-hidden border border-[#DCE3ED] shadow-md bg-white aspect-[16/9] block lg:max-w-none lg:mb-0 lg:rounded-none lg:border-0 lg:shadow-none lg:bg-transparent lg:aspect-auto lg:absolute lg:inset-0 lg:pointer-events-none">
+          <source srcSet="/hero-bg.webp" type="image/webp" />
+          <img
+            src="/hero-bg.png"
+            alt="HERO Hybrid Emergency Response and Operations"
+            width={1672}
+            height={941}
+            fetchPriority="high"
+            decoding="async"
+            className="w-full h-full object-cover object-left lg:object-center"
+          />
+        </picture>
         {isDark && (
           <div
             aria-hidden="true"
             className="hidden lg:block absolute inset-0 bg-[#07152B]/45 pointer-events-none"
           />
         )}
-
-        {/* Mobile / Compact Tablet Hero Strip using HERO_BG */}
-        <div className="lg:hidden w-full max-w-[460px] mb-5 rounded-2xl overflow-hidden border border-[#DCE3ED] shadow-md bg-white">
-          <div className="relative w-full aspect-[16/9]">
-            <img
-              src="/hero-bg.png"
-              alt="HERO Hybrid Emergency Response and Operations"
-              className="w-full h-full object-cover object-left"
-            />
-          </div>
-        </div>
 
         {/* Right Side Login Card – Secure Access */}
         <section

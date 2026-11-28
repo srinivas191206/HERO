@@ -370,11 +370,17 @@ export default function StateAdminPortal() {
             {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
 
-          <img
-            src="/hero-logo.png"
-            className="w-10 h-10 object-contain flex-shrink-0"
-            alt="HERO Crest"
-          />
+          <picture className="flex-shrink-0">
+            <source srcSet="/hero-logo.webp" type="image/webp" />
+            <img
+              src="/hero-logo.png"
+              width={284}
+              height={254}
+              decoding="async"
+              className="w-10 h-10 object-contain"
+              alt="HERO Crest"
+            />
+          </picture>
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
