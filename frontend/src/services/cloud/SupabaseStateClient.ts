@@ -267,7 +267,11 @@ export class SupabaseStateClient {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to create district in Supabase.');
+      const rawMsg = String(err?.message || '');
+      if (res.status === 409 || rawMsg.includes('duplicate') || err?.code === '23505') {
+        throw new Error(`District code "${cleanCode}" already exists in State Cloud.`);
+      }
+      throw new Error(rawMsg || 'Failed to create district in Supabase.');
     }
 
     // Seed default Alpha/Bravo teams in Supabase for this district
@@ -316,7 +320,11 @@ export class SupabaseStateClient {
 
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.message || 'Failed to assign user in Supabase.');
+      const rawMsg = String(data?.message || '');
+      if (res.status === 409 || rawMsg.includes('duplicate') || data?.code === '23505') {
+        throw new Error(`Badge / Login PID "${input.badgeNumber.trim()}" already exists.`);
+      }
+      throw new Error(rawMsg || 'Failed to assign user in Supabase.');
     }
     return data;
   }

@@ -142,6 +142,47 @@ async function runTests() {
     const kkdOffAuth = await loginUser('kkd_p1', 'police');
     assert.strictEqual(kkdOffAuth.user.districtId, kkdId);
 
+    // Duplicate district code & duplicate PID prevention
+    const dupDistRes = await fetch(`${baseUrl}/api/state/districts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${stateAuth.token}` },
+      body: JSON.stringify({ name: 'Dup KKD', code: 'KKD', centerLat: 16.9, centerLng: 82.2 })
+    });
+    assert.strictEqual(dupDistRes.status, 409);
+
+    const dupUserRes = await fetch(`${baseUrl}/api/state/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${stateAuth.token}` },
+      body: JSON.stringify({
+        badgeNumber: 'kkd_p1',
+        name: 'Duplicate',
+        pin: 'police',
+        role: 'officer',
+        districtId: kkdId
+      })
+    });
+    assert.strictEqual(dupUserRes.status, 409);
+
+    const kkdDispRes = await fetch(`${baseUrl}/api/state/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${stateAuth.token}` },
+      body: JSON.stringify({
+        badgeNumber: 'kkd_disp1',
+        name: 'Kakinada Dispatcher',
+        pin: 'police',
+        role: 'dispatcher',
+        districtId: kkdId
+      })
+    });
+    assert.strictEqual(kkdDispRes.status, 201);
+
+    const invalidBatchRes = await fetch(`${baseUrl}/api/officers/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${dispAuth.token}` },
+      body: JSON.stringify({ count: 55, defaultPin: 'police' })
+    });
+    assert.strictEqual(invalidBatchRes.status, 400);
+
     const bundleRes = await fetch(`${baseUrl}/api/state/districts/${kkdId}/bundle`, {
       headers: { Authorization: `Bearer ${stateAuth.token}` }
     });

@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { HUDPanel } from '../../components/ui/HUDPanel';
-import { TacticalButton } from '../../components/ui/TacticalButton';
 import { TacticalMap } from '../../components/shared/TacticalMap';
 import { Hero3DGisView, FlyTo3DTarget } from '../../components/shared/Hero3DGisView';
 import { IntelligenceModuleRenderer } from '../../components/intelligence/IntelligenceModuleRenderer';
 import { IncidentTrendsCard } from '../../components/admin/IncidentTrendsCard';
 import { RecentActivityPanel } from '../../components/admin/RecentActivityPanel';
 import { InfrastructureHealthCard } from '../../components/admin/InfrastructureHealthCard';
+import { ProvisioningWorkspace } from '../../components/admin/ProvisioningWorkspace';
 import { getEnabledIntelligenceModules, IntelligenceModuleId } from '../../config/intelligenceModules';
 import { AP_DISTRICTS, getTacticalFacilitiesForDistrict, matchApDistrict } from '../../utils/apDistricts';
 import { fetchBatchWeather } from '../../services/intelligence/OpenMeteoService';
@@ -20,8 +20,8 @@ import { clientEventBus } from '../../services/events/EventBus';
 import { AuditLog, DistrictSummary, Incident, StateInfrastructureHealth, User } from '../../types';
 import {
   Bell, Box, Building2, CheckCircle2, Cloud, CloudLightning, CloudRain,
-  Download, ExternalLink, Flame, Globe2, KeyRound, LogOut, Map as MapIcon, Menu,
-  Mountain, Plus, RefreshCw, Route as RouteIcon, ShieldAlert, UserPlus, Users,
+  Download, ExternalLink, Flame, Globe2, LogOut, Map as MapIcon, Menu,
+  Mountain, Plus, RefreshCw, Route as RouteIcon, ShieldAlert, Users,
   Waves, Wifi, WifiOff, X
 } from 'lucide-react';
 
@@ -65,32 +65,6 @@ export default function StateAdminPortal() {
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [exportingDistrictId, setExportingDistrictId] = useState<string | null>(null);
 
-  // Create District Form
-  const [distName, setDistName] = useState('');
-  const [distCode, setDistCode] = useState('');
-  const [distState, setDistState] = useState('Andhra Pradesh');
-  const [distLat, setDistLat] = useState('17.6868');
-  const [distLng, setDistLng] = useState('83.2185');
-  const [distOfficerCount, setDistOfficerCount] = useState<number>(5);
-  const [generatedNodeKey, setGeneratedNodeKey] = useState<{ districtId: string; key: string } | null>(null);
-
-  // Assign User / Batch Deploy Form
-  const [assignMode, setAssignMode] = useState<'batch' | 'single'>('batch');
-  const [assignDistrictId, setAssignDistrictId] = useState('');
-  const [batchCount, setBatchCount] = useState<number>(5);
-  const [batchPrefix, setBatchPrefix] = useState('');
-  const [batchPin, setBatchPin] = useState('police');
-  const [generatedCredentials, setGeneratedCredentials] = useState<Array<{
-    badgeNumber: string;
-    name: string;
-    pin: string;
-    teamName?: string;
-  }>>([]);
-  const [badgeNumber, setBadgeNumber] = useState('');
-  const [officerName, setOfficerName] = useState('');
-  const [officerPin, setOfficerPin] = useState('police');
-  const [officerRole, setOfficerRole] = useState<'dispatcher' | 'officer'>('officer');
-
   const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationPopoverRef = useRef<HTMLDivElement>(null);
 
@@ -118,7 +92,6 @@ export default function StateAdminPortal() {
         setInfraHealth(snap.health);
         setSnapshotTimestamp(snap.health.timestamp);
         setFetchError(null);
-        setAssignDistrictId(prev => (!prev && snap.districts.length > 0 ? snap.districts[0].id : prev));
         return;
       }
 
@@ -165,7 +138,6 @@ export default function StateAdminPortal() {
       setInfraHealth(healthData);
       setSnapshotTimestamp(healthData.timestamp);
       setFetchError(null);
-      setAssignDistrictId(prev => (!prev && list.length > 0 ? list[0].id : prev));
     } catch (err: unknown) {
       console.error('Failed to fetch state overview:', err);
       if (err instanceof SupabaseSessionExpiredError) {
@@ -264,178 +236,6 @@ export default function StateAdminPortal() {
       active = false;
     };
   }, [user, isOnline]);
-
-  // Provisioning handlers (reused verbatim from existing architecture)
-  const handleCreateDistrict = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token) return;
-    setFeedback(null);
-    setGeneratedNodeKey(null);
-    setGeneratedCredentials([]);
-    try {
-      if (authMode === 'cloud') {
-        const data = await SupabaseStateClient.createDistrict(token, {
-          name: distName,
-          code: distCode,
-          stateName: distState,
-          centerLat: parseFloat(distLat),
-          centerLng: parseFloat(distLng)
-        });
-        let deployed: Array<{
-          badgeNumber: string;
-          name: string;
-          pin: string;
-          teamName?: string;
-        }> = [];
-        if (distOfficerCount > 0) {
-          deployed = await SupabaseStateClient.batchDeployOfficers(token, {
-            districtId: data.district.id,
-            count: distOfficerCount,
-            defaultPin: 'police'
-          });
-          setGeneratedCredentials(deployed);
-        }
-        setGeneratedNodeKey({ districtId: data.district.id, key: data.nodeKey });
-        setFeedback({
-          type: 'ok',
-          text: `District "${data.district.name}" created with ${deployed.length} officer credentials in Supabase.`
-        });
-        setDistName('');
-        setDistCode('');
-        setAssignDistrictId(data.district.id);
-        fetchOverview();
-        return;
-      }
-
-      const res = await fetch(`${getBackendUrl()}/api/state/districts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: distName,
-          code: distCode,
-          stateName: distState,
-          centerLat: parseFloat(distLat),
-          centerLng: parseFloat(distLng),
-          officerCount: distOfficerCount,
-          defaultPin: 'police'
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setFeedback({ type: 'err', text: data.error || 'Failed to create district.' });
-        return;
-      }
-      setGeneratedNodeKey({ districtId: data.district.id, key: data.nodeKey });
-      if (data.deployedOfficers?.length) {
-        setGeneratedCredentials(data.deployedOfficers);
-      }
-      setFeedback({
-        type: 'ok',
-        text: `District "${data.district.name}" created with ${data.deployedOfficers?.length || 0} officer credentials.`
-      });
-      setDistName('');
-      setDistCode('');
-      setAssignDistrictId(data.district.id);
-      fetchOverview();
-    } catch (err: unknown) {
-      setFeedback({ type: 'err', text: getErrMsg(err, 'Network error creating district.') });
-    }
-  };
-
-  const handleBatchDeploy = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token || !assignDistrictId) return;
-    setFeedback(null);
-    try {
-      if (authMode === 'cloud') {
-        const created = await SupabaseStateClient.batchDeployOfficers(token, {
-          districtId: assignDistrictId,
-          count: batchCount,
-          prefix: batchPrefix || undefined,
-          defaultPin: batchPin || 'police'
-        });
-        setGeneratedCredentials(created);
-        setFeedback({ type: 'ok', text: `Generated ${created.length} officer credentials in Supabase.` });
-        fetchOverview();
-        return;
-      }
-
-      const res = await fetch(`${getBackendUrl()}/api/officers/batch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          districtId: assignDistrictId,
-          count: batchCount,
-          prefix: batchPrefix || undefined,
-          defaultPin: batchPin || 'police'
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setFeedback({ type: 'err', text: data.error || 'Failed to batch deploy officers.' });
-        return;
-      }
-      setGeneratedCredentials(data.created || []);
-      setFeedback({ type: 'ok', text: `Generated ${data.created?.length || 0} officer credentials for district.` });
-      fetchOverview();
-    } catch (err: unknown) {
-      setFeedback({ type: 'err', text: getErrMsg(err, 'Failed to deploy officers.') });
-    }
-  };
-
-  const handleAssignUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token) return;
-    setFeedback(null);
-    try {
-      if (authMode === 'cloud') {
-        const data = await SupabaseStateClient.assignUser(token, {
-          badgeNumber,
-          name: officerName,
-          pin: officerPin,
-          role: officerRole,
-          districtId: assignDistrictId
-        });
-        setFeedback({ type: 'ok', text: `Assigned ${data.role} "${data.name}" (${data.badgeNumber}) in Supabase.` });
-        setBadgeNumber('');
-        setOfficerName('');
-        fetchOverview();
-        return;
-      }
-
-      const res = await fetch(`${getBackendUrl()}/api/state/users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          badgeNumber,
-          name: officerName,
-          pin: officerPin,
-          role: officerRole,
-          districtId: assignDistrictId
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setFeedback({ type: 'err', text: data.error || 'Failed to assign personnel.' });
-        return;
-      }
-      setFeedback({ type: 'ok', text: `Assigned ${data.role} "${data.name}" (${data.badgeNumber}) to district.` });
-      setBadgeNumber('');
-      setOfficerName('');
-      fetchOverview();
-    } catch (err: unknown) {
-      setFeedback({ type: 'err', text: getErrMsg(err, 'Network error assigning user.') });
-    }
-  };
 
   const handleExportBundle = async (district: DistrictSummary) => {
     if (!token) return;
@@ -1105,48 +905,6 @@ export default function StateAdminPortal() {
             </div>
           )}
 
-          {generatedNodeKey && (
-            <div className="p-4 rounded-2xl border border-amber-300 bg-amber-50 text-amber-900 space-y-1.5 text-xs">
-              <div className="font-black uppercase flex items-center gap-1.5">
-                <KeyRound className="w-4 h-4" />
-                District Sync Key Generated (Save for District Laptop .env)
-              </div>
-              <pre className="font-mono text-[11px] bg-white p-2.5 rounded-xl border border-amber-200 select-all overflow-x-auto">
-                {`DISTRICT_ID=${generatedNodeKey.districtId}\nDISTRICT_NODE_KEY=${generatedNodeKey.key}`}
-              </pre>
-            </div>
-          )}
-
-          {generatedCredentials.length > 0 && (
-            <div className="p-4 rounded-2xl border border-emerald-300 bg-emerald-50 text-emerald-950 space-y-2.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-black uppercase flex items-center gap-1.5 text-emerald-800">
-                  <Users className="w-4 h-4" />
-                  Generated Officer Credentials ({generatedCredentials.length} Deployed)
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const text = generatedCredentials.map(c => `${c.badgeNumber} / ${c.pin} (${c.name})`).join('\n');
-                    navigator.clipboard?.writeText(text);
-                  }}
-                  className="px-2.5 py-1 bg-white border border-emerald-300 rounded-lg text-[10px] font-black uppercase text-emerald-700 hover:bg-emerald-100 cursor-pointer"
-                >
-                  Copy All
-                </button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-                {generatedCredentials.map((cred, idx) => (
-                  <div key={idx} className="bg-white border border-emerald-200 rounded-xl p-2.5 font-mono text-[11px]">
-                    <div className="font-black text-sky-700">PID: {cred.badgeNumber}</div>
-                    <div className="text-slate-600 font-bold">PIN: {cred.pin}</div>
-                    <div className="text-[9px] text-slate-400 font-sans truncate">{cred.name}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* OVERVIEW TAB: DISTRICT CARDS + LOWER OPERATIONAL INTELLIGENCE WORKSPACE */}
           {activeTab === 'overview' && (
             <div className="space-y-5">
@@ -1515,256 +1273,21 @@ export default function StateAdminPortal() {
             );
           })()}
 
-          {/* PROVISIONING TAB */}
+          {/* PROVISIONING TAB (Create & Assign Districts Workspace) */}
           {activeTab === 'provision' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <HUDPanel title="Create Disaster Response District" subtitle="Provision New District Command Hub">
-                <form onSubmit={handleCreateDistrict} className="space-y-3 text-xs">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">
-                      Quick-Fill from AP 28 Districts (Official Coordinates)
-                    </label>
-                    <select
-                      defaultValue=""
-                      onChange={e => {
-                        const chosen = AP_DISTRICTS.find(d => d.district === e.target.value);
-                        if (chosen) {
-                          setDistName(`${chosen.district} District Hub`);
-                          setDistCode(chosen.code);
-                          setDistState('Andhra Pradesh');
-                          setDistLat(String(chosen.centerLat));
-                          setDistLng(String(chosen.centerLng));
-                        }
-                      }}
-                      className="w-full px-3.5 py-2 bg-sky-50/70 border border-sky-200 rounded-xl font-bold text-sky-900 focus:outline-none focus:border-sky-500 cursor-pointer"
-                    >
-                      <option value="">-- Select AP District to auto-fill coordinates --</option>
-                      {AP_DISTRICTS.map(d => (
-                        <option key={d.district} value={d.district}>
-                          {d.district} ({d.code}) — {d.centerLat.toFixed(4)}, {d.centerLng.toFixed(4)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">District Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Visakhapatnam District Hub"
-                      value={distName}
-                      onChange={e => setDistName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:outline-none focus:border-sky-500"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">District Code</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. VZG"
-                        value={distCode}
-                        onChange={e => setDistCode(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold uppercase focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">State</label>
-                      <input
-                        type="text"
-                        value={distState}
-                        onChange={e => setDistState(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">HQ Latitude</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={distLat}
-                        onChange={e => setDistLat(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">HQ Longitude</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={distLng}
-                        onChange={e => setDistLng(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Deploy Officers</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={50}
-                        value={distOfficerCount}
-                        onChange={e => setDistOfficerCount(Number(e.target.value))}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-                  </div>
-                  <TacticalButton type="submit" variant="primary" glow className="w-full py-2.5 text-xs mt-2">
-                    <Plus className="w-4 h-4" />
-                    Create District Hub &amp; Generate {distOfficerCount} Officers
-                  </TacticalButton>
-                </form>
-              </HUDPanel>
-
-              <HUDPanel title="Assign District Personnel" subtitle="Batch Generate PIDs or Add Single Account">
-                <div className="space-y-3 text-xs">
-                  <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => setAssignMode('batch')}
-                      className={`py-1.5 rounded-lg text-[10px] font-black uppercase cursor-pointer transition ${
-                        assignMode === 'batch' ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-500'
-                      }`}
-                    >
-                      Deploy by Count (Batch)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAssignMode('single')}
-                      className={`py-1.5 rounded-lg text-[10px] font-black uppercase cursor-pointer transition ${
-                        assignMode === 'single' ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-500'
-                      }`}
-                    >
-                      Single Officer / Dispatcher
-                    </button>
-                  </div>
-
-                  {assignMode === 'batch' ? (
-                    <form onSubmit={handleBatchDeploy} className="space-y-3">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Target District</label>
-                        <select
-                          value={assignDistrictId}
-                          onChange={e => setAssignDistrictId(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-sky-500"
-                        >
-                          {districts.map(d => (
-                            <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Person Count</label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={50}
-                            required
-                            value={batchCount}
-                            onChange={e => setBatchCount(Number(e.target.value))}
-                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-black focus:outline-none focus:border-sky-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">PID Prefix (Opt.)</label>
-                          <input
-                            type="text"
-                            placeholder="auto (e.g. p)"
-                            value={batchPrefix}
-                            onChange={e => setBatchPrefix(e.target.value)}
-                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-sky-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Default PIN</label>
-                          <input
-                            type="text"
-                            required
-                            value={batchPin}
-                            onChange={e => setBatchPin(e.target.value)}
-                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold focus:outline-none focus:border-sky-500"
-                          />
-                        </div>
-                      </div>
-                      <TacticalButton type="submit" variant="success" glow className="w-full py-2.5 text-xs mt-2">
-                        <UserPlus className="w-4 h-4" />
-                        Generate {batchCount} Officer PIDs (PIN: {batchPin})
-                      </TacticalButton>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleAssignUser} className="space-y-3">
-                      <div>
-                        <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Target District</label>
-                        <select
-                          value={assignDistrictId}
-                          onChange={e => setAssignDistrictId(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-sky-500"
-                        >
-                          {districts.map(d => (
-                            <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Role</label>
-                          <select
-                            value={officerRole}
-                            onChange={e => setOfficerRole(e.target.value as 'officer' | 'dispatcher')}
-                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:outline-none focus:border-sky-500"
-                          >
-                            <option value="officer">Field Officer</option>
-                            <option value="dispatcher">District Command Dispatcher</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Badge / Login ID</label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. vzg_p1"
-                            value={badgeNumber}
-                            onChange={e => setBadgeNumber(e.target.value)}
-                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold focus:outline-none focus:border-sky-500"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Full Name</label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. Inspector Ravi"
-                            value={officerName}
-                            onChange={e => setOfficerName(e.target.value)}
-                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold focus:outline-none focus:border-sky-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-black uppercase text-slate-500 block mb-1">Access PIN</label>
-                          <input
-                            type="text"
-                            required
-                            value={officerPin}
-                            onChange={e => setOfficerPin(e.target.value)}
-                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:border-sky-500"
-                          />
-                        </div>
-                      </div>
-                      <TacticalButton type="submit" variant="success" glow className="w-full py-2.5 text-xs mt-2">
-                        <UserPlus className="w-4 h-4" />
-                        Assign to District Roster
-                      </TacticalButton>
-                    </form>
-                  )}
-                </div>
-              </HUDPanel>
-            </div>
+            <ProvisioningWorkspace
+              districts={districts}
+              officers={stateOfficers}
+              token={token}
+              authMode={authMode}
+              backendUrl={getBackendUrl()}
+              onRefreshState={() => fetchOverview(false)}
+              onOpenDistrictHub={(distId) =>
+                router.push(`/command?districtId=${encodeURIComponent(distId)}`)
+              }
+              onExportBundle={handleExportBundle}
+              onReturnToHub={() => setActiveTab('overview')}
+            />
           )}
 
           {/* STATEWIDE 2D RADAR TAB */}
