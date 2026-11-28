@@ -1340,6 +1340,7 @@ export default function StateAdminPortal() {
               moduleId={activeTab}
               districts={districts}
               officers={stateOfficers}
+              incidents={stateIncidents}
               onInspectIn3D={(target) => {
                 const matched = matchApDistrict(target.districtName || target.name);
                 setSelected3dDistrictName(matched?.district || target.districtName || '');
