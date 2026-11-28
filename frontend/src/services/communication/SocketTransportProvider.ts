@@ -219,5 +219,10 @@ export class SocketTransportProvider implements ITransport {
     this.socket.on('incident:warning', (data: any) => {
       clientEventBus.publish('incident:warning_received', data);
     });
+
+    // Live incident status & assignment broadcasts (District Command + State Admins)
+    this.socket.on('incident:updated', (data: any) => {
+      clientEventBus.publish('incident:updated', data);
+    });
   }
 }

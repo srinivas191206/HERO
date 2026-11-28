@@ -549,5 +549,216 @@ export class SupabaseStateClient {
       }))
     };
   }
+
+  static async fetchStateOperationsSnapshot(accessToken: string): Promise<{
+    districts: DistrictSummary[];
+    incidents: Incident[];
+    officers: User[];
+    auditLogs: AuditLog[];
+    health: {
+      status: 'Operational' | 'Degraded' | 'Offline';
+      cloudConfigured: boolean;
+      latencyMs: number;
+      pendingSyncTotal: number;
+      failedSyncTotal: number;
+      syncedTotal: number;
+      timestamp: number;
+    };
+  }> {
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const cutoff48h = Date.now() - 48 * 60 * 60 * 1000;
+
+    const [distRes, usersRes, incRes, audRes] = await Promise.all([
+      this.authedFetch(`${SUPABASE_URL}/rest/v1/districts?select=*&order=created_at.asc`, accessToken),
+      this.authedFetch(
+        `${SUPABASE_URL}/rest/v1/users?select=id,badge_number,name,role,status,battery,team_id,district_id,last_heartbeat,last_lat,last_lng`,
+        accessToken
+      ),
+      this.authedFetch(
+        `${SUPABASE_URL}/rest/v1/incidents?or=(timestamp.gte.${cutoff48h},status.not.in.(Closed,Resolved))&select=*&order=timestamp.desc&limit=300`,
+        accessToken
+      ),
+      this.authedFetch(`${SUPABASE_URL}/rest/v1/audit_logs?select=*&order=timestamp.desc&limit=50`, accessToken)
+    ]);
+
+    if (!distRes.ok) {
+      if (distRes.status === 401) throw new SupabaseSessionExpiredError();
+      throw new Error(`Failed to load districts from Supabase (HTTP ${distRes.status}).`);
+    }
+
+    const latencyMs = Math.round(
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt
+    );
+
+    const districtsRaw = await distRes.json();
+    const usersRaw = usersRes.ok ? await usersRes.json() : [];
+    const incRaw = incRes.ok ? await incRes.json() : [];
+    const audRaw = audRes.ok ? await audRes.json() : [];
+
+    const allOk = distRes.ok && usersRes.ok && incRes.ok && audRes.ok;
+
+    const districts: DistrictSummary[] = (districtsRaw || []).map((d: any) => {
+      const distOfficers = (usersRaw || []).filter((u: any) => u.district_id === d.id && u.role === 'officer');
+      const activeInc = (incRaw || []).filter(
+        (i: any) => i.district_id === d.id && i.status !== 'Closed' && i.status !== 'Resolved'
+      );
+      return {
+        id: d.id,
+        code: d.code,
+        name: d.name,
+        stateName: d.state_name,
+        centerLat: d.center_lat,
+        centerLng: d.center_lng,
+        status: d.status,
+        lastSyncAt: d.last_sync_at,
+        createdAt: d.created_at,
+        totalOfficers: distOfficers.length,
+        onlineOfficers: distOfficers.filter(
+          (u: any) => u.status !== 'Offline' && u.status !== 'Lost Connection'
+        ).length,
+        sosCount: distOfficers.filter((u: any) => u.status === 'Emergency').length,
+        activeIncidents: activeInc.length,
+        p1Count: activeInc.filter((i: any) => i.priority === 'P1').length,
+        pendingSyncCount: 0
+      };
+    });
+
+    const incidents: Incident[] = (incRaw || []).map((i: any) => ({
+      id: i.id,
+      title: i.title,
+      description: i.description,
+      priority: i.priority,
+      status: i.status,
+      locationLat: i.location_lat ?? null,
+      locationLng: i.location_lng ?? null,
+      reporterId: i.reporter_id,
+      assigneeId: i.assignee_id,
+      districtId: i.district_id,
+      timestamp: Number(i.timestamp),
+      timeline: typeof i.timeline === 'string' ? i.timeline : JSON.stringify(i.timeline || [])
+    }));
+
+    const officers: User[] = (usersRaw || [])
+      .filter((u: any) => u.role === 'officer')
+      .map((u: any) => ({
+        id: u.id,
+        badgeNumber: u.badge_number,
+        name: u.name,
+        role: u.role,
+        status: u.status,
+        battery: u.battery ?? 100,
+        teamId: u.team_id,
+        districtId: u.district_id,
+        lastHeartbeat: u.last_heartbeat,
+        location:
+          u.last_lat != null && u.last_lng != null
+            ? {
+                latitude: u.last_lat,
+                longitude: u.last_lng,
+                timestamp: u.last_heartbeat || Date.now()
+              }
+            : null
+      }));
+
+    const auditLogs: AuditLog[] = (audRaw || []).map((a: any) => ({
+      id: a.id,
+      userId: a.user_id,
+      districtId: a.district_id,
+      action: a.action,
+      ipAddress: a.ip_address,
+      timestamp: Number(a.timestamp)
+    }));
+
+    return {
+      districts,
+      incidents,
+      officers,
+      auditLogs,
+      health: {
+        status: allOk ? 'Operational' : 'Degraded',
+        cloudConfigured: this.isConfigured(),
+        latencyMs,
+        pendingSyncTotal: 0,
+        failedSyncTotal: allOk ? 0 : 1,
+        syncedTotal: districts.filter(d => d.status === 'online').length,
+        timestamp: Date.now()
+      }
+    };
+  }
+
+  /**
+   * Lightweight Supabase Realtime WebSocket subscription (Phoenix channel)
+   * subscribing to state-wide postgres_changes without requiring @supabase/supabase-js.
+   */
+  static subscribeStateRealtime(
+    accessToken: string,
+    onTableChange: (table: string) => void
+  ): () => void {
+    if (typeof window === 'undefined' || !this.isConfigured() || !accessToken) {
+      return () => {};
+    }
+
+    let closed = false;
+    let heartbeatId: ReturnType<typeof setInterval> | null = null;
+    let ws: WebSocket | null = null;
+    let refCounter = 1;
+
+    try {
+      const wsBase = SUPABASE_URL.replace(/^http/i, 'ws');
+      const wsUrl = `${wsBase}/realtime/v1/websocket?apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}&vsn=1.0.0`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        if (closed || !ws) return;
+        const topic = 'realtime:state-ops';
+        ws.send(
+          JSON.stringify({
+            topic,
+            event: 'phx_join',
+            payload: {
+              config: {
+                postgres_changes: [
+                  { event: '*', schema: 'public', table: 'districts' },
+                  { event: '*', schema: 'public', table: 'incidents' },
+                  { event: '*', schema: 'public', table: 'users' },
+                  { event: '*', schema: 'public', table: 'audit_logs' }
+                ]
+              },
+              access_token: accessToken
+            },
+            ref: String(refCounter++)
+          })
+        );
+
+        heartbeatId = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(refCounter++) }));
+          }
+        }, 25000);
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg?.event === 'postgres_changes') {
+            const tbl = msg?.payload?.data?.table || msg?.payload?.table || 'unknown';
+            onTableChange(tbl);
+          }
+        } catch {}
+      };
+    } catch {
+      // Silently degrade to manual/periodic refresh
+    }
+
+    return () => {
+      closed = true;
+      if (heartbeatId) clearInterval(heartbeatId);
+      if (ws) {
+        try {
+          ws.close();
+        } catch {}
+      }
+    };
+  }
 }
 

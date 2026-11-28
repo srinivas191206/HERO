@@ -263,6 +263,21 @@ async function runTests() {
     assert.strictEqual(verifyBody.verified, false);
     assert.strictEqual(verifyBody.computedHash, validHash);
 
+    console.log('5b. Testing enriched /api/state/overview telemetry (incidents, officers, auditLogs, health)...');
+    const stateOverviewRes = await fetch(`${baseUrl}/api/state/overview`, {
+      headers: { Authorization: `Bearer ${stateAuth.token}` }
+    });
+    assert.strictEqual(stateOverviewRes.status, 200);
+    const stateOverview = await stateOverviewRes.json();
+    assert.ok(Array.isArray(stateOverview.districts) && stateOverview.districts.length >= 3);
+    assert.ok(Array.isArray(stateOverview.incidents) && stateOverview.incidents.some((i: any) => i.id === sosAck.incidentId));
+    assert.ok(Array.isArray(stateOverview.officers) && stateOverview.officers.some((o: any) => o.badgeNumber === 'kkd_p1'));
+    const kkdOfficer = stateOverview.officers.find((o: any) => o.badgeNumber === 'kkd_p1');
+    assert.strictEqual(kkdOfficer.location, null, 'Officer without GPS log must report null location rather than fabricated coords');
+    assert.ok(Array.isArray(stateOverview.auditLogs) && stateOverview.auditLogs.length > 0);
+    assert.strictEqual(stateOverview.health?.status, 'Operational');
+    assert.ok(typeof stateOverview.health?.pendingSyncTotal === 'number');
+
     offSocket.disconnect();
 
     console.log('6. Testing CloudSyncService offline queue -> Supabase Edge Function drain...');

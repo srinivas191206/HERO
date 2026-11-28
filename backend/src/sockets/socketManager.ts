@@ -124,11 +124,14 @@ export class SocketManager {
 
         AuditService.log(userId, `Socket connection established (Socket ID: ${socket.id})`, null, districtId);
 
-        this.io.to(this.districtGlobalRoom(districtId)).emit('officer:status_change', {
+        const statusPayload = {
           userId,
+          districtId,
           status: 'Available',
           lastHeartbeat: Date.now()
-        });
+        };
+        this.io.to(this.districtGlobalRoom(districtId)).emit('officer:status_change', statusPayload);
+        this.io.to('state_admins').emit('officer:status_change', statusPayload);
       };
 
       registerConnection();
@@ -174,14 +177,17 @@ export class SocketManager {
           location: packet.location
         });
 
-        this.io.to(this.districtDispatchersRoom(districtId)).emit('officer:telemetry', {
+        const telemetryPayload = {
           userId,
+          districtId,
           battery: packet.battery,
           status: packet.status,
           networkQuality: packet.networkQuality,
           location: packet.location || null,
           lastHeartbeat: Date.now()
-        });
+        };
+        this.io.to(this.districtDispatchersRoom(districtId)).emit('officer:telemetry', telemetryPayload);
+        this.io.to('state_admins').emit('officer:telemetry', telemetryPayload);
       });
 
       // Handle SOS trigger (Priority 1) with acknowledgement
@@ -189,18 +195,23 @@ export class SocketManager {
         try {
           const incident = IncidentService.triggerSOS(userId, data.lat ?? null, data.lng ?? null, districtId);
 
-          this.io.to(this.districtGlobalRoom(districtId)).emit('sos:broadcast', {
+          const sosPayload = {
             incident,
             officerId: userId,
             districtId,
             status: 'Emergency'
-          });
+          };
+          this.io.to(this.districtGlobalRoom(districtId)).emit('sos:broadcast', sosPayload);
+          this.io.to('state_admins').emit('sos:broadcast', sosPayload);
 
-          this.io.to(this.districtGlobalRoom(districtId)).emit('officer:status_change', {
+          const statusPayload = {
             userId,
+            districtId,
             status: 'Emergency',
             lastHeartbeat: Date.now()
-          });
+          };
+          this.io.to(this.districtGlobalRoom(districtId)).emit('officer:status_change', statusPayload);
+          this.io.to('state_admins').emit('officer:status_change', statusPayload);
 
           socket.emit('sos:ack', {
             id: data.id || incident.id,
@@ -413,11 +424,14 @@ export class SocketManager {
           this.connections.delete(socket.id);
           this.userSockets.delete(conn.userId);
 
-          this.io.to(this.districtGlobalRoom(conn.districtId)).emit('officer:status_change', {
+          const offPayload = {
             userId: conn.userId,
+            districtId: conn.districtId,
             status: 'Offline',
             lastHeartbeat: Date.now()
-          });
+          };
+          this.io.to(this.districtGlobalRoom(conn.districtId)).emit('officer:status_change', offPayload);
+          this.io.to('state_admins').emit('officer:status_change', offPayload);
 
           AuditService.log(conn.userId, `Socket connection terminated (Socket ID: ${socket.id})`, null, conn.districtId);
         }
@@ -431,18 +445,24 @@ export class SocketManager {
       for (const officer of lostOfficers) {
         console.log(`[TIMEOUT] Officer ${officer.name} (ID: ${officer.id}) flagged as Lost Connection`);
 
-        this.io.to(this.districtGlobalRoom(officer.districtId)).emit('officer:status_change', {
+        const lostPayload = {
           userId: officer.id,
+          districtId: officer.districtId,
           status: 'Lost Connection',
           lastHeartbeat: Date.now()
-        });
+        };
+        this.io.to(this.districtGlobalRoom(officer.districtId)).emit('officer:status_change', lostPayload);
+        this.io.to('state_admins').emit('officer:status_change', lostPayload);
 
-        this.io.to(this.districtDispatchersRoom(officer.districtId)).emit('incident:warning', {
+        const warnPayload = {
           title: 'Officer Connection Lost',
           message: `Heartbeat timeout: Lost contact with ${officer.name}.`,
           officerId: officer.id,
+          districtId: officer.districtId,
           timestamp: Date.now()
-        });
+        };
+        this.io.to(this.districtDispatchersRoom(officer.districtId)).emit('incident:warning', warnPayload);
+        this.io.to('state_admins').emit('incident:warning', warnPayload);
       }
     }, 10000);
   }

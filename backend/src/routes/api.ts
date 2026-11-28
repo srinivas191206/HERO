@@ -8,6 +8,20 @@ import { DeviceService } from '../services/device/DeviceService';
 import { HeuristicRecommendationService } from '../services/recommendations/HeuristicRecommendationService';
 import { AuditService } from '../services/audit/AuditService';
 import { CloudSyncService } from '../services/sync/CloudSyncService';
+import os from 'os';
+
+function getLocalLanIPs(): string[] {
+  const ips: string[] = [];
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const net of interfaces[name] || []) {
+      if (net.family === 'IPv4' && !net.internal) {
+        ips.push(net.address);
+      }
+    }
+  }
+  return ips;
+}
 
 const router = express.Router();
 const recommendationService = new HeuristicRecommendationService();
@@ -278,11 +292,14 @@ router.post('/incidents', authenticateJWT, (req: AuthenticatedRequest, res: Resp
 
     const socketManager = req.app.get('socketManager');
     if (socketManager) {
-      socketManager.getIO().to(`district:${districtId}:global`).emit('incident:updated', {
+      const eventPayload = {
         incidentId: incident.id,
+        districtId,
         status: incident.status,
         incident
-      });
+      };
+      socketManager.getIO().to(`district:${districtId}:global`).emit('incident:updated', eventPayload);
+      socketManager.getIO().to('state_admins').emit('incident:updated', eventPayload);
     }
 
     res.status(201).json(incident);
@@ -312,10 +329,13 @@ router.post('/incidents/:id/status', authenticateJWT, requireRole('dispatcher', 
     const updated = IncidentService.updateStatus(id, status, req.user.id);
     const socketManager = req.app.get('socketManager');
     if (socketManager) {
-      socketManager.getIO().to(`district:${existing.districtId}:global`).emit('incident:updated', {
+      const eventPayload = {
         incidentId: id,
+        districtId: existing.districtId,
         status
-      });
+      };
+      socketManager.getIO().to(`district:${existing.districtId}:global`).emit('incident:updated', eventPayload);
+      socketManager.getIO().to('state_admins').emit('incident:updated', eventPayload);
     }
     res.json({ success: true, incident: updated });
   } catch (error) {
@@ -360,17 +380,23 @@ router.post('/incidents/:id/dispatch', authenticateJWT, requireRole('dispatcher'
 
     const socketManager = req.app.get('socketManager');
     if (socketManager) {
-      socketManager.getIO().to(`district:${existing.districtId}:global`).emit('officer:status_change', {
+      const statusPayload = {
         userId: assigneeId,
+        districtId: existing.districtId,
         status: 'Assigned',
         lastHeartbeat: Date.now()
-      });
-
-      socketManager.getIO().to(`district:${existing.districtId}:global`).emit('incident:updated', {
+      };
+      const incPayload = {
         incidentId: id,
+        districtId: existing.districtId,
         status: 'Dispatched',
         assigneeId
-      });
+      };
+      socketManager.getIO().to(`district:${existing.districtId}:global`).emit('officer:status_change', statusPayload);
+      socketManager.getIO().to('state_admins').emit('officer:status_change', statusPayload);
+
+      socketManager.getIO().to(`district:${existing.districtId}:global`).emit('incident:updated', incPayload);
+      socketManager.getIO().to('state_admins').emit('incident:updated', incPayload);
     }
 
     res.json({ success: true, message: 'Officer dispatched successfully.' });
@@ -505,17 +531,23 @@ router.post('/officers/:id/resolve-sos', authenticateJWT, requireRole('dispatche
 
     const socketManager = req.app.get('socketManager');
     if (socketManager) {
-      socketManager.getIO().to(`district:${officer.districtId}:global`).emit('officer:status_change', {
+      const statusPayload = {
         userId: id,
+        districtId: officer.districtId,
         status: 'Available',
         lastHeartbeat: Date.now()
-      });
+      };
+      socketManager.getIO().to(`district:${officer.districtId}:global`).emit('officer:status_change', statusPayload);
+      socketManager.getIO().to('state_admins').emit('officer:status_change', statusPayload);
 
       for (const inc of openSOSIncidents) {
-        socketManager.getIO().to(`district:${officer.districtId}:global`).emit('incident:updated', {
+        const incPayload = {
           incidentId: inc.id,
+          districtId: officer.districtId,
           status: 'Resolved'
-        });
+        };
+        socketManager.getIO().to(`district:${officer.districtId}:global`).emit('incident:updated', incPayload);
+        socketManager.getIO().to('state_admins').emit('incident:updated', incPayload);
       }
     }
 
@@ -678,7 +710,68 @@ router.get('/state/overview', authenticateJWT, requireRole('state_admin'), (req:
       };
     });
 
-    res.json({ districts: summaries });
+    const cutoff48h = Date.now() - 48 * 60 * 60 * 1000;
+    const incidents = db.prepare(`
+      SELECT id, title, description, priority, status,
+             location_lat as locationLat, location_lng as locationLng,
+             reporter_id as reporterId, assignee_id as assigneeId,
+             district_id as districtId, timestamp, timeline
+      FROM incidents
+      WHERE timestamp >= ? OR status NOT IN ('Closed', 'Resolved')
+      ORDER BY timestamp DESC
+      LIMIT 300
+    `).all(cutoff48h) as any[];
+
+    const officersRaw = db.prepare(`
+      SELECT u.id, u.badge_number as badgeNumber, u.name, u.role, u.status, u.battery,
+             u.team_id as teamId, t.name as teamName, u.district_id as districtId,
+             u.last_heartbeat as lastHeartbeat
+      FROM users u
+      LEFT JOIN teams t ON u.team_id = t.id
+      WHERE u.role = 'officer'
+    `).all() as any[];
+
+    const latestGpsStmt = db.prepare(`
+      SELECT latitude, longitude, heading, speed, accuracy, network_quality as networkQuality, timestamp
+      FROM gps_logs
+      WHERE officer_id = ?
+      ORDER BY timestamp DESC
+      LIMIT 1
+    `);
+
+    const officers = officersRaw.map(off => ({
+      ...off,
+      location: latestGpsStmt.get(off.id) || null
+    }));
+
+    const auditLogs = AuditService.getRecentLogs(50);
+
+    const queueTotals = db.prepare(`
+      SELECT
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pendingSyncTotal,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failedSyncTotal,
+        SUM(CASE WHEN status = 'synced' THEN 1 ELSE 0 END) as syncedTotal
+      FROM cloud_sync_queue
+    `).get() as { pendingSyncTotal: number | null; failedSyncTotal: number | null; syncedTotal: number | null };
+
+    const cloudConfig = CloudSyncService.getCloudConfig();
+
+    res.json({
+      districts: summaries,
+      incidents,
+      officers,
+      auditLogs,
+      health: {
+        status: 'Operational',
+        activeDistrictId: getActiveDistrictId(),
+        cloudConfigured: cloudConfig.configured,
+        pendingSyncTotal: queueTotals?.pendingSyncTotal || 0,
+        failedSyncTotal: queueTotals?.failedSyncTotal || 0,
+        syncedTotal: queueTotals?.syncedTotal || 0,
+        lanIPs: getLocalLanIPs(),
+        timestamp: Date.now()
+      }
+    });
   } catch (error) {
     console.error('Error building state overview:', error);
     res.status(500).json({ error: 'Failed to load state overview.' });

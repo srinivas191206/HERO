@@ -68,11 +68,15 @@ export default function CommandCenterDashboard() {
   const [generatedPins, setGeneratedPins] = useState<Record<string, string>>({});
   const [deployNotice, setDeployNotice] = useState<string | null>(null);
 
+  const [initialIncidentId, setInitialIncidentId] = useState<string | null>(null);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const qDist = params.get('districtId');
+      const qInc = params.get('incidentId');
       if (qDist) setActiveDistrictId(qDist);
+      if (qInc) setInitialIncidentId(qInc);
     }
   }, []);
 
@@ -268,6 +272,13 @@ export default function CommandCenterDashboard() {
         const snap = await SupabaseStateClient.fetchDistrictSnapshot(token, targetDist);
         setOfficers(snap.officers);
         setIncidents(snap.incidents);
+        if (initialIncidentId) {
+          const matched = snap.incidents.find(i => i.id === initialIncidentId);
+          if (matched) {
+            setSelectedIncident(matched);
+            setInitialIncidentId(null);
+          }
+        }
         setAuditLogs(snap.auditLogs);
         setChatMessages(snap.messages);
         setEvidenceLogs(snap.evidence);
@@ -327,8 +338,13 @@ export default function CommandCenterDashboard() {
         setIncidents(data);
         setMetrics(prev => ({ ...prev, incidents: data.length }));
 
-        // Update selected incident reference if it changed
-        if (selectedIncident) {
+        if (initialIncidentId) {
+          const targetInc = data.find((i: Incident) => i.id === initialIncidentId);
+          if (targetInc) {
+            setSelectedIncident(targetInc);
+            setInitialIncidentId(null);
+          }
+        } else if (selectedIncident) {
           const fresh = data.find((i: Incident) => i.id === selectedIncident.id);
           if (fresh) setSelectedIncident(fresh);
         }

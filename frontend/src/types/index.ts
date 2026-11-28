@@ -121,7 +121,28 @@ export interface Device {
 export interface AuditLog {
   id: string;
   userId: string | null;
+  districtId?: string | null;
   action: string;
   ipAddress: string | null;
   timestamp: number;
+}
+
+export interface StateInfrastructureHealth {
+  status: 'Operational' | 'Degraded' | 'Offline';
+  activeDistrictId?: string;
+  cloudConfigured: boolean;
+  latencyMs?: number;
+  pendingSyncTotal: number;
+  failedSyncTotal: number;
+  syncedTotal: number;
+  lanIPs?: string[];
+  timestamp: number;
+}
+
+export interface StateOperationsSnapshot {
+  districts: DistrictSummary[];
+  incidents: Incident[];
+  officers: User[];
+  auditLogs: AuditLog[];
+  health: StateInfrastructureHealth;
 }

@@ -135,3 +135,31 @@ body {
     linear-gradient(to right, rgba(15, 23, 42, 0.015) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(15, 23, 42, 0.015) 1px, transparent 1px);
 }
+
+/* Native <dialog> modal scroll-chaining guard */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+/* Edge-resilient header notification popover */
+@supports (position-area: block-end) {
+  [popover].hero-notif-popover {
+    inset: auto;
+    margin: 0;
+    position-area: block-end span-inline-start;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  }
+}
+
+@supports not (position-area: block-end) {
+  [popover].hero-notif-popover {
+    position: fixed;
+    inset: 4.5rem 1.25rem auto auto;
+    margin: 0;
+  }
+}

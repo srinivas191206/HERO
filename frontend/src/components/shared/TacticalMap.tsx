@@ -2,17 +2,20 @@
 
 import React from 'react';
 import dynamic from 'next/dynamic';
-import { User, Incident } from '../../types';
+import { User, Incident, DistrictSummary } from '../../types';
 import { RefreshCw } from 'lucide-react';
 
 interface TacticalMapProps {
   officers?: User[];
   incidents?: Incident[];
+  districts?: DistrictSummary[];
   currentOfficerLocation?: { lat: number; lng: number; heading: number; isReal?: boolean } | null;
   districtCenter?: { lat: number; lng: number } | null;
   onDispatchOfficer?: (officerId: string, incidentId: string) => void;
   selectedIncidentId?: string | null;
   onSelectIncident?: (incidentId: string | null) => void;
+  onOpenDistrictHub?: (districtId: string) => void;
+  onOpenIncident?: (incident: Incident) => void;
   onInspectIn3D?: (target: {
     id?: string;
     name: string;
@@ -23,6 +26,10 @@ interface TacticalMapProps {
     levels?: number;
   }) => void;
   isCommandCenter?: boolean;
+  strictRealCoordinates?: boolean;
+  showApDistrictGeoJson?: boolean;
+  defaultBasemap?: 'osm' | 'street' | 'satellite' | 'topo';
+  isExpandable?: boolean;
 }
 
 // Dynamically load the Real Leaflet Map component, disabling SSR so 'window' is available

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono, Noto_Sans_Telugu } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '../context/AuthContext';
 import { AppProvider } from '../context/AppContext';
@@ -12,6 +12,12 @@ const inter = Inter({
 const jetbrainsMono = JetBrains_Mono({
   variable: '--font-mono',
   subsets: ['latin'],
+});
+
+const notoSansTelugu = Noto_Sans_Telugu({
+  variable: '--font-telugu',
+  subsets: ['telugu'],
+  weight: ['400', '500', '600', '700'],
 });
 
 export const viewport = {
@@ -34,7 +40,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${notoSansTelugu.variable} h-full antialiased`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />
