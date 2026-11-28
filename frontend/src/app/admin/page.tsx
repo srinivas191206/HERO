@@ -1338,6 +1338,8 @@ export default function StateAdminPortal() {
             activeTab === 'landslide') && (
             <IntelligenceModuleRenderer
               moduleId={activeTab}
+              districts={districts}
+              officers={stateOfficers}
               onInspectIn3D={(target) => {
                 const matched = matchApDistrict(target.districtName || target.name);
                 setSelected3dDistrictName(matched?.district || target.districtName || '');

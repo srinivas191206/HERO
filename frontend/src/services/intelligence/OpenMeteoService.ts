@@ -10,6 +10,8 @@ export interface PointWeatherTelemetry {
   soilMoistureTop: number | null;
   soilMoistureRoot: number | null;
   hourlyTime: string[];
+  hourlyTemperatureC: number[];
+  hourlyRelativeHumidity: number[];
   hourlyPrecipitationMm: number[];
   hourlyApparentTempC: number[];
   hourlySoilMoistureTop: number[];
@@ -45,6 +47,12 @@ function fetchWithTimeout(url: string, ms = 8000): Promise<Response> {
 function parsePointWeather(item: any, lat: number, lng: number): PointWeatherTelemetry {
   const hourly = item?.hourly || {};
   const hourlyTime: string[] = Array.isArray(hourly.time) ? hourly.time : [];
+  const hourlyTemp: number[] = Array.isArray(hourly.temperature_2m)
+    ? hourly.temperature_2m.map((v: unknown) => Number(v) || 0)
+    : [];
+  const hourlyRh: number[] = Array.isArray(hourly.relative_humidity_2m)
+    ? hourly.relative_humidity_2m.map((v: unknown) => Number(v) || 0)
+    : [];
   const hourlyPrecip: number[] = Array.isArray(hourly.precipitation)
     ? hourly.precipitation.map((v: any) => Number(v) || 0)
     : [];
@@ -78,6 +86,8 @@ function parsePointWeather(item: any, lat: number, lng: number): PointWeatherTel
     soilMoistureTop: hourlySoil[0] ?? null,
     soilMoistureRoot: hourlySoilDeep[0] ?? null,
     hourlyTime,
+    hourlyTemperatureC: hourlyTemp,
+    hourlyRelativeHumidity: hourlyRh,
     hourlyPrecipitationMm: hourlyPrecip,
     hourlyApparentTempC: hourlyApparent,
     hourlySoilMoistureTop: hourlySoil,
@@ -98,7 +108,7 @@ export async function fetchPointWeather(lat: number, lng: number): Promise<Point
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
     `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m` +
-    `&hourly=precipitation,apparent_temperature,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm` +
+    `&hourly=temperature_2m,relative_humidity_2m,precipitation,apparent_temperature,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm` +
     `&forecast_days=3&timezone=Asia%2FKolkata`;
 
   const res = await fetchWithTimeout(url, 8000);
@@ -133,7 +143,7 @@ export async function fetchBatchWeather(
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}` +
     `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m` +
-    `&hourly=precipitation,apparent_temperature,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm` +
+    `&hourly=temperature_2m,relative_humidity_2m,precipitation,apparent_temperature,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm` +
     `&forecast_days=3&timezone=Asia%2FKolkata`;
 
   const reqPromise = (async () => {

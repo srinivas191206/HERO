@@ -1,24 +1,30 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Compass, Flame, RefreshCw, ShieldAlert, Sun, Thermometer } from 'lucide-react';
-import { HUDPanel } from '../ui/HUDPanel';
 import { IntelligenceLeafletMap, MapMarkerSpec } from './IntelligenceLeafletMap';
-import { AP_DISTRICTS, ApDistrictMeta } from '../../utils/apDistricts';
+import { AP_DISTRICTS, matchApDistrict } from '../../utils/apDistricts';
 import { fetchBatchWeather, PointWeatherTelemetry } from '../../services/intelligence/OpenMeteoService';
+import { DistrictSummary, User } from '../../types';
+import {
+  DistrictHeatRow,
+  HeatStressTier,
+  HeatwaveControlPanel,
+  ThermalFeedStatus
+} from './HeatwaveControlPanel';
+import { HeatwaveAdvisoryPanel } from './HeatwaveAdvisoryPanel';
+import { HeatwaveVulnerabilityProfile } from './HeatwaveVulnerabilityProfile';
+import { DistrictThermalTrendCard } from './DistrictThermalTrendCard';
 
-interface DistrictHeatRow {
-  meta: ApDistrictMeta;
-  liveTempC: number;
-  liveRh: number;
-  heatIndexC: number;
-  apsdmaPeakC: number;
-  displayTempC: number;
-  stressTier: 'NORMAL' | 'CAUTION' | 'EXTREME CAUTION' | 'DANGER' | 'EXTREME DANGER';
+interface GeoJsonDistrictFeature {
+  properties?: {
+    district?: string;
+    peak_tmax?: number;
+    peak_mandal?: string;
+  };
 }
 
-function getHeatTier(tempC: number): DistrictHeatRow['stressTier'] {
+function getHeatTier(tempC: number): HeatStressTier {
   if (tempC >= 46) return 'EXTREME DANGER';
   if (tempC >= 42) return 'DANGER';
   if (tempC >= 38) return 'EXTREME CAUTION';
@@ -36,20 +42,37 @@ function getHeatFillColor(tempC: number): string {
 }
 
 interface HeatwaveIntelligenceProps {
-  onInspectIn3D?: (target: { id: string; name: string; lat: number; lng: number; kind: 'station' | 'landmark'; districtName?: string; description: string }) => void;
+  districts?: DistrictSummary[];
+  officers?: User[];
+  onInspectIn3D?: (target: {
+    id: string;
+    name: string;
+    lat: number;
+    lng: number;
+    kind: 'station' | 'landmark';
+    districtName?: string;
+    description: string;
+  }) => void;
 }
 
-export const HeatwaveIntelligence: React.FC<HeatwaveIntelligenceProps> = ({ onInspectIn3D }) => {
-  const [geojsonData, setGeojsonData] = useState<any>(null);
+export const HeatwaveIntelligence: React.FC<HeatwaveIntelligenceProps> = ({
+  districts = [],
+  officers = [],
+  onInspectIn3D
+}) => {
+  const [geojsonData, setGeojsonData] = useState<unknown>(null);
   const [weatherByDist, setWeatherByDist] = useState<Record<string, PointWeatherTelemetry>>({});
+  const [weatherStatus, setWeatherStatus] = useState<ThermalFeedStatus>('loading');
+  const [lastSyncedLabel, setLastSyncedLabel] = useState<string | null>(null);
   const [dataSourceMode, setDataSourceMode] = useState<'live' | 'apsdma'>('apsdma');
   const [selectedDist, setSelectedDist] = useState<string>('Eluru');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const fetchSeqRef = useRef<number>(0);
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    // Load local 28-district GeoJSON immediately so choropleth draws in <100ms
-    if (!geojsonData) {
+  const executeLoadAll = useCallback(async (needsGeoJson: boolean) => {
+    const seq = ++fetchSeqRef.current;
+
+    if (needsGeoJson) {
       fetch('/gis-3d/data/ap_districts.geojson')
         .then(r => (r.ok ? r.json() : null))
         .then(gj => {
@@ -57,26 +80,61 @@ export const HeatwaveIntelligence: React.FC<HeatwaveIntelligenceProps> = ({ onIn
         })
         .catch(() => {});
     }
+
     try {
-      const batch = await fetchBatchWeather(AP_DISTRICTS.map(d => ({ lat: d.centerLat, lng: d.centerLng }))).catch(() => []);
+      const batch = await fetchBatchWeather(
+        AP_DISTRICTS.map(d => ({ lat: d.centerLat, lng: d.centerLng }))
+      );
+      if (seq !== fetchSeqRef.current) return;
+
       const map: Record<string, PointWeatherTelemetry> = {};
       AP_DISTRICTS.forEach((d, i) => {
         if (batch[i]) map[d.district] = batch[i];
       });
       setWeatherByDist(map);
+      setWeatherStatus(Object.keys(map).length > 0 ? 'live' : 'unavailable');
+      setLastSyncedLabel(
+        new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      );
+    } catch {
+      if (seq === fetchSeqRef.current) {
+        setWeatherStatus('error');
+      }
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) {
+        setLoading(false);
+      }
     }
-  }, [geojsonData]);
+  }, []);
 
   useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const timer = setTimeout(() => {
+      void executeLoadAll(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [executeLoadAll]);
+
+  const handleRefresh = useCallback(() => {
+    setLoading(true);
+    setWeatherStatus(prev => (prev === 'live' ? 'live' : 'loading'));
+    void executeLoadAll(!geojsonData);
+  }, [executeLoadAll, geojsonData]);
+
+  // Verified officer counts by canonical AP district name
+  const officerCountByDist = useMemo(() => {
+    const counts: Record<string, number> = {};
+    districts.forEach(d => {
+      const canonical = matchApDistrict(d.name)?.district || matchApDistrict(d.code)?.district;
+      if (!canonical) return;
+      counts[canonical] = officers.filter(o => o.districtId === d.id && o.role === 'officer').length;
+    });
+    return counts;
+  }, [districts, officers]);
 
   const rows: DistrictHeatRow[] = useMemo(() => {
     return AP_DISTRICTS.map(meta => {
       const w = weatherByDist[meta.district];
+      const hasLiveWeather = Boolean(w);
       const liveTempC = w?.temperatureC ?? 33.0;
       const liveRh = w?.relativeHumidity ?? 55;
       const heatIndexC = w?.apparentTemperatureC ?? liveTempC + 2.0;
@@ -89,10 +147,12 @@ export const HeatwaveIntelligence: React.FC<HeatwaveIntelligenceProps> = ({ onIn
         heatIndexC,
         apsdmaPeakC,
         displayTempC,
-        stressTier: getHeatTier(displayTempC)
+        stressTier: getHeatTier(displayTempC),
+        hasLiveWeather,
+        verifiedOfficerCount: officerCountByDist[meta.district] ?? 0
       };
     });
-  }, [weatherByDist, dataSourceMode]);
+  }, [weatherByDist, dataSourceMode, officerCountByDist]);
 
   const activeRow = useMemo(
     () => rows.find(r => r.meta.district === selectedDist) || rows[0],
@@ -100,7 +160,7 @@ export const HeatwaveIntelligence: React.FC<HeatwaveIntelligenceProps> = ({ onIn
   );
 
   const geojsonStyle = useCallback(
-    (feature: any): L.PathOptions => {
+    (feature: GeoJsonDistrictFeature): L.PathOptions => {
       const distName = feature?.properties?.district;
       const row = rows.find(r => r.meta.district === distName);
       const temp = row?.displayTempC ?? feature?.properties?.peak_tmax ?? 38;
@@ -115,13 +175,14 @@ export const HeatwaveIntelligence: React.FC<HeatwaveIntelligenceProps> = ({ onIn
     [rows, selectedDist]
   );
 
-  const onEachFeature = useCallback((feature: any, layer: L.Layer) => {
+  const onEachFeature = useCallback((feature: GeoJsonDistrictFeature, layer: L.Layer) => {
     const distName = feature?.properties?.district;
     if (!distName) return;
     layer.on('click', () => setSelectedDist(distName));
-    layer.bindTooltip(`${distName} • Peak ${feature?.properties?.peak_tmax ?? '--'}°C (${feature?.properties?.peak_mandal || ''})`, {
-      sticky: true
-    });
+    layer.bindTooltip(
+      `${distName} • Peak ${feature?.properties?.peak_tmax ?? '--'}°C (${feature?.properties?.peak_mandal || ''})`,
+      { sticky: true }
+    );
   }, []);
 
   const markers: MapMarkerSpec[] = useMemo(() => {
@@ -141,97 +202,39 @@ export const HeatwaveIntelligence: React.FC<HeatwaveIntelligenceProps> = ({ onIn
       }));
   }, [rows, selectedDist]);
 
-  const sortedRows = useMemo(() => [...rows].sort((a, b) => b.displayTempC - a.displayTempC), [rows]);
-
   return (
-    <div className="space-y-5">
-      <HUDPanel
-        title="Heatwave & Human Thermal Stress Intelligence"
-        subtitle="APSDMA 28-District Heatwave Baseline + Live Open-Meteo Apparent Temperature / Thermal Stress Index"
-        statusColor={activeRow && activeRow.displayTempC >= 42 ? 'red' : 'amber'}
-        headerRight={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-[10px] font-black uppercase">
-              <button
-                type="button"
-                onClick={() => setDataSourceMode('apsdma')}
-                className={`px-2.5 py-1 rounded-lg cursor-pointer ${dataSourceMode === 'apsdma' ? 'bg-white text-red-600 shadow-xs' : 'text-slate-500'}`}
-              >
-                APSDMA Peak
-              </button>
-              <button
-                type="button"
-                onClick={() => setDataSourceMode('live')}
-                className={`px-2.5 py-1 rounded-lg cursor-pointer ${dataSourceMode === 'live' ? 'bg-white text-sky-700 shadow-xs' : 'text-slate-500'}`}
-              >
-                Live Heat Index
-              </button>
-            </div>
-            {onInspectIn3D && activeRow && (
-              <button
-                type="button"
-                onClick={() =>
-                  onInspectIn3D({
-                    id: activeRow.meta.code,
-                    name: `${activeRow.meta.district} Thermal Monitoring HQ`,
-                    lat: activeRow.meta.centerLat,
-                    lng: activeRow.meta.centerLng,
-                    kind: 'station',
-                    districtName: activeRow.meta.district,
-                    description: `Peak ${activeRow.apsdmaPeakC}°C (${activeRow.meta.peakMandal}) • Live Heat Index ${activeRow.heatIndexC.toFixed(1)}°C`
-                  })
-                }
-                className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
-              >
-                <Compass className="w-3.5 h-3.5" />
-                3D District
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={loadAll}
-              className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 cursor-pointer"
-              title="Refresh Live Thermal Feed"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+    <div className="space-y-4">
+      {/* Top Thermal Intelligence Header & 5-Element Control Panel */}
+      <HeatwaveControlPanel
+        rows={rows}
+        activeRow={activeRow}
+        selectedDist={selectedDist}
+        onSelectDist={setSelectedDist}
+        dataSourceMode={dataSourceMode}
+        onChangeDataSourceMode={setDataSourceMode}
+        weatherStatus={weatherStatus}
+        lastSyncedLabel={lastSyncedLabel}
+        loading={loading}
+        onRefresh={handleRefresh}
+        onInspectIn3D={
+          onInspectIn3D && activeRow
+            ? () =>
+                onInspectIn3D({
+                  id: activeRow.meta.code,
+                  name: `${activeRow.meta.district} Thermal Monitoring HQ`,
+                  lat: activeRow.meta.centerLat,
+                  lng: activeRow.meta.centerLng,
+                  kind: 'station',
+                  districtName: activeRow.meta.district,
+                  description: `Peak ${activeRow.apsdmaPeakC}°C (${activeRow.meta.peakMandal}) • Live Heat Index ${activeRow.heatIndexC.toFixed(1)}°C`
+                })
+            : undefined
         }
-      >
-        {activeRow && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
-              <span className="text-[9px] font-black uppercase text-slate-400 block">SELECTED DISTRICT</span>
-              <span className="text-sm font-black text-slate-800">{activeRow.meta.district}</span>
-              <span className="text-[10px] text-slate-500 block">Hottest Mandal: {activeRow.meta.peakMandal}</span>
-            </div>
-            <div className="p-3 rounded-2xl bg-red-50 border border-red-200">
-              <span className="text-[9px] font-black uppercase text-red-600 block">APSDMA PEAK TMAX</span>
-              <span className="text-lg font-black font-mono text-red-700">{activeRow.apsdmaPeakC}°C</span>
-            </div>
-            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200">
-              <span className="text-[9px] font-black uppercase text-amber-700 block">LIVE TEMP / RH</span>
-              <span className="text-lg font-black font-mono text-amber-800">
-                {activeRow.liveTempC.toFixed(1)}°C <span className="text-xs font-bold">({activeRow.liveRh}%)</span>
-              </span>
-            </div>
-            <div className="p-3 rounded-2xl bg-orange-50 border border-orange-200">
-              <span className="text-[9px] font-black uppercase text-orange-700 block">HUMAN HEAT INDEX</span>
-              <span className="text-lg font-black font-mono text-orange-800">{activeRow.heatIndexC.toFixed(1)}°C</span>
-            </div>
-            <div className="p-3 rounded-2xl bg-slate-900 text-white border border-slate-800">
-              <span className="text-[9px] font-black uppercase text-sky-300 block">STRESS TIER</span>
-              <span className="text-sm font-black flex items-center gap-1.5 mt-0.5">
-                <Flame className="w-4 h-4 text-amber-400" />
-                {activeRow.stressTier}
-              </span>
-            </div>
-          </div>
-        )}
-      </HUDPanel>
+      />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2 h-[460px]">
+      {/* Main Two-Column Workspace: Left Protected AP Thermal Map (~67%) + Right Advisory & Ranking (~33%) */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+        <div className="xl:col-span-8 bg-white border border-slate-200 rounded-2xl p-2 shadow-xs h-[460px] sm:h-[520px] xl:h-[540px] min-h-[420px]">
           <IntelligenceLeafletMap
             center={[15.95, 80.1]}
             zoom={7}
@@ -239,52 +242,39 @@ export const HeatwaveIntelligence: React.FC<HeatwaveIntelligenceProps> = ({ onIn
             geojsonStyle={geojsonStyle}
             onEachGeoJsonFeature={onEachFeature}
             markers={markers}
+            className="h-full rounded-xl border-slate-100"
           />
         </div>
 
-        <HUDPanel title="State Thermal Stress & Vulnerable Advisories" subtitle="28 Districts Live Ranking" className="h-[460px]">
-          <div className="flex flex-col h-full gap-3">
-            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[10.5px] space-y-1">
-              <div className="font-black uppercase flex items-center gap-1.5 text-amber-800">
-                <Sun className="w-3.5 h-3.5" />
-                Vulnerable Population &amp; Field Force Guidance
-              </div>
-              <p className="leading-snug">
-                {activeRow && activeRow.displayTempC >= 42
-                  ? `HIGH THERMAL STRESS in ${activeRow.meta.district}: Rotate outdoor traffic/beat police every 90 mins (12:00–16:00 IST), activate ORS kiosks & cooling shelters near ${activeRow.meta.peakMandal}.`
-                  : `Monitor midday UV & Heat Index in ${activeRow?.meta.district || 'AP'}; keep hydration kits active for field patrols & elderly wards.`}
-              </p>
-            </div>
+        <div className="xl:col-span-4 min-w-0">
+          <HeatwaveAdvisoryPanel
+            rows={rows}
+            activeRow={activeRow}
+            selectedDist={selectedDist}
+            onSelectDist={setSelectedDist}
+            dataSourceMode={dataSourceMode}
+            weatherStatus={weatherStatus}
+            lastSyncedLabel={lastSyncedLabel}
+          />
+        </div>
+      </div>
 
-            <div tabIndex={0} role="region" aria-label="Heatwave thermal ranking" className="intel-table-wrapper flex-1">
-              <table className="w-full text-left text-xs border-collapse">
-                <caption className="sr-only">Andhra Pradesh 28-district thermal stress table</caption>
-                <thead className="bg-slate-50 border-b border-slate-200 text-[9px] font-black uppercase text-slate-500">
-                  <tr>
-                    <th scope="col" className="py-2 px-2">District</th>
-                    <th scope="col" className="py-2 px-2">Peak Mandal</th>
-                    <th scope="col" className="py-2 px-2">Live HI</th>
-                    <th scope="col" className="py-2 px-2">APSDMA</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {sortedRows.map(r => (
-                    <tr
-                      key={r.meta.code}
-                      onClick={() => setSelectedDist(r.meta.district)}
-                      className={`cursor-pointer ${r.meta.district === selectedDist ? 'bg-red-50' : 'hover:bg-slate-50'}`}
-                    >
-                      <td className="py-1.5 px-2 font-bold text-slate-800">{r.meta.district}</td>
-                      <td className="py-1.5 px-2 text-slate-500">{r.meta.peakMandal}</td>
-                      <td className="py-1.5 px-2 font-mono font-bold text-sky-700">{r.heatIndexC.toFixed(1)}°</td>
-                      <td className="py-1.5 px-2 font-mono font-black text-red-600">{r.apsdmaPeakC}°</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </HUDPanel>
+      {/* Bottom Intelligence Row: Human Vulnerability Profile + Live District Thermal Trend */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+        <div className="xl:col-span-7 min-w-0">
+          <HeatwaveVulnerabilityProfile
+            activeRow={activeRow}
+            districts={districts}
+            officers={officers}
+          />
+        </div>
+        <div className="xl:col-span-5 min-w-0">
+          <DistrictThermalTrendCard
+            districtName={selectedDist}
+            weather={weatherByDist[selectedDist]}
+            weatherStatus={weatherStatus}
+          />
+        </div>
       </div>
     </div>
   );
