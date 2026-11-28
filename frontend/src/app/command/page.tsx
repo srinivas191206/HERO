@@ -1653,7 +1653,7 @@ export default function CommandCenterDashboard() {
 
           {/* TAB 2B: FULL-HEIGHT 3D GIS & ULPIN FLOOR INSPECTOR */}
           {activeTab === 'gis3d' && (
-            <div className="h-[calc(100vh-230px)] min-h-[600px] animate-fadeIn">
+            <div className="h-[calc(100vh-230px)] min-h-[600px] flex flex-col animate-fadeIn">
               <Hero3DGisView
                 mode="district"
                 districtName={activeDistrictMeta.name}
@@ -1668,6 +1668,7 @@ export default function CommandCenterDashboard() {
                   activeDistrictMeta.lng
                 )}
                 pendingFlyTo={pending3dFlyTo}
+                className="flex-1"
                 onEntitySelectedFrom3D={(sel) => {
                   if (sel.kind === 'incident' && sel.id) {
                     handleSelectIncidentId(sel.id);

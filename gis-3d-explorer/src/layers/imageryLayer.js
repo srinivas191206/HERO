@@ -4,21 +4,34 @@ import { MAP_CONFIG } from '../config/mapConfig.js';
 let activeImageryLayer = null;
 let currentProviderType = 'esri';
 
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    )
+  ]);
+}
+
 export async function setupImageryLayers(viewer) {
   viewer.imageryLayers.removeAll();
 
   try {
-    // Primary: Esri World Satellite
-    const provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
-      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
-      { enablePickFeatures: false }
+    // Primary: Esri World Satellite (bounded timeout so slow networks never stall startup)
+    const provider = await withTimeout(
+      Cesium.ArcGisMapServerImageryProvider.fromUrl(
+        'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+        { enablePickFeatures: false }
+      ),
+      4000,
+      'Esri World Imagery'
     );
     activeImageryLayer = viewer.imageryLayers.addImageryProvider(provider);
     currentProviderType = 'esri';
     console.log('Esri World Imagery initialized successfully');
     return activeImageryLayer;
   } catch (err) {
-    console.warn('Esri fromUrl failed, falling back to OSM:', err.message);
+    console.warn('Esri fromUrl failed or timed out, falling back to OSM:', err.message);
   }
 
   // Fallback: OpenStreetMap
@@ -36,9 +49,13 @@ export async function switchImageryProvider(viewer, type) {
 
   try {
     if (type === 'esri') {
-      const provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
-        'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
-        { enablePickFeatures: false }
+      const provider = await withTimeout(
+        Cesium.ArcGisMapServerImageryProvider.fromUrl(
+          'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+          { enablePickFeatures: false }
+        ),
+        5000,
+        'Esri World Imagery'
       );
       activeImageryLayer = viewer.imageryLayers.addImageryProvider(provider);
     } else if (type === 'osm') {

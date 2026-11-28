@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Box, Building2, Globe2, MapPin, Maximize2, Minimize2, ShieldAlert, Siren, Warehouse
+  Box, Building2, ExternalLink, Globe2, MapPin, Maximize2, Minimize2, RefreshCw, ShieldAlert, Siren, Warehouse
 } from 'lucide-react';
 import { Incident, User } from '../../types';
 import { isTrustedSameOriginEvent } from '../../utils/originValidation';
@@ -77,9 +77,23 @@ export const Hero3DGisView: React.FC<Hero3DGisViewProps> = ({
   const workspaceRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isReady, setIsReady] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [isBooting, setIsBooting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [slowLoad, setSlowLoad] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
   const [activeShortcutId, setActiveShortcutId] = useState<string>('root');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  const handleRetryViewer = React.useCallback(() => {
+    setIsReady(false);
+    setIframeLoaded(false);
+    setIsBooting(false);
+    setLoadError(null);
+    setSlowLoad(false);
+    setReloadNonce(n => n + 1);
+  }, []);
 
   const initialSrc = React.useMemo(() => {
     const params = new URLSearchParams();
@@ -131,8 +145,17 @@ export const Hero3DGisView: React.FC<Hero3DGisViewProps> = ({
       if (!isTrustedSameOriginEvent(event)) return;
       if (event.source !== iframeRef.current?.contentWindow) return;
       const { type, payload } = event.data || {};
-      if (type === 'HERO_GIS_READY') {
+      if (type === 'HERO_GIS_BOOTING') {
+        setIsBooting(true);
+        setLoadError(null);
+      } else if (type === 'HERO_GIS_READY') {
         setIsReady(true);
+        setIsBooting(false);
+        setLoadError(null);
+        setSlowLoad(false);
+      } else if (type === 'HERO_GIS_ERROR') {
+        setIsBooting(false);
+        setLoadError(payload?.message || '3D Geospatial engine failed to initialize.');
       } else if (type === 'HERO_3D_ENTITY_SELECTED') {
         if (payload?.name) setSelectedLabel(payload.name);
         if (payload?.id) setActiveShortcutId(String(payload.id));
@@ -143,6 +166,14 @@ export const Hero3DGisView: React.FC<Hero3DGisViewProps> = ({
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [onEntitySelectedFrom3D]);
+
+  useEffect(() => {
+    if (isReady || loadError) return;
+    const timer = window.setTimeout(() => {
+      setSlowLoad(true);
+    }, 12000);
+    return () => window.clearTimeout(timer);
+  }, [isReady, loadError, reloadNonce]);
 
   // Sync districts, officers, incidents, stations, and shelters whenever data or readiness updates
   useEffect(() => {
@@ -257,7 +288,7 @@ export const Hero3DGisView: React.FC<Hero3DGisViewProps> = ({
       } ${className}`}
     >
       {/* Unified Light Context Header */}
-      <div className="bg-white border-b border-slate-100 px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex-shrink-0 bg-white border-b border-slate-100 px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-[#EEF4FD] border border-[#DCE7F7] text-[#0788C9] flex items-center justify-center flex-shrink-0">
             <Box className="w-5 h-5" aria-hidden="true" />
@@ -299,24 +330,24 @@ export const Hero3DGisView: React.FC<Hero3DGisViewProps> = ({
         <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
           <span
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold ${
-              isNetworkOnline && isReady
-                ? 'bg-emerald-50 border-emerald-200 text-[#16A477]'
-                : isNetworkOnline
-                  ? 'bg-amber-50 border-amber-200 text-[#D99A28]'
-                  : 'bg-red-50 border-red-200 text-[#D93636]'
+              loadError || !isNetworkOnline
+                ? 'bg-red-50 border-red-200 text-[#D93636]'
+                : isReady
+                  ? 'bg-emerald-50 border-emerald-200 text-[#16A477]'
+                  : 'bg-amber-50 border-amber-200 text-[#D99A28]'
             }`}
           >
             <span
               className={`w-2 h-2 rounded-full ${
-                isNetworkOnline && isReady
-                  ? 'bg-[#16A477] animate-pulse'
-                  : isNetworkOnline
-                    ? 'bg-[#D99A28]'
-                    : 'bg-[#D93636]'
+                loadError || !isNetworkOnline
+                  ? 'bg-[#D93636]'
+                  : isReady
+                    ? 'bg-[#16A477] animate-pulse'
+                    : 'bg-[#D99A28]'
               }`}
             />
             <span>
-              {!isNetworkOnline ? 'Offline' : isReady ? 'Live' : 'Initializing...'}
+              {!isNetworkOnline ? 'Offline' : loadError ? 'Error' : isReady ? 'Live' : 'Initializing...'}
             </span>
           </span>
 
@@ -371,7 +402,7 @@ export const Hero3DGisView: React.FC<Hero3DGisViewProps> = ({
       <div
         role="toolbar"
         aria-label="3D GIS Location Shortcuts"
-        className="bg-white border-b border-slate-200 px-4 sm:px-5 py-2.5 flex items-center gap-2 overflow-x-auto"
+        className="flex-shrink-0 bg-white border-b border-slate-200 px-4 sm:px-5 py-2.5 flex items-center gap-2 overflow-x-auto"
       >
         <button
           type="button"
@@ -511,14 +542,96 @@ export const Hero3DGisView: React.FC<Hero3DGisViewProps> = ({
       </div>
 
       {/* Directly Integrated Existing Cesium 3D GIS Engine (100% Preserved) */}
-      <div className="relative flex-1 w-full min-h-[500px] bg-slate-950">
+      <div className="relative flex-1 w-full min-h-[540px] bg-slate-950 overflow-hidden">
         <iframe
+          key={reloadNonce}
           ref={iframeRef}
           src={initialSrc}
           title="HERO 3D GIS & ULPIN Vertical Property Explorer"
-          className="w-full h-full border-0 block"
+          className="absolute inset-0 w-full h-full border-0 block bg-black"
           allow="fullscreen; geolocation"
+          onLoad={() => {
+            setIframeLoaded(true);
+            try {
+              const doc = iframeRef.current?.contentDocument;
+              if (doc && !doc.getElementById('cesium-container')) {
+                setLoadError('3D GIS viewer page (/gis-3d/viewer.html) failed to load.');
+              }
+            } catch {
+              // Cross-context access guard
+            }
+          }}
+          onError={() => {
+            setLoadError('Failed to load the 3D GIS viewer frame.');
+          }}
         />
+
+        {(!isReady || loadError) && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center bg-slate-950/90 backdrop-blur-[2px]">
+            {loadError ? (
+              <div className="max-w-md rounded-2xl border border-red-500/40 bg-slate-900/95 p-5 shadow-xl space-y-3">
+                <p className="text-sm font-bold text-red-400">3D GIS Engine Could Not Start</p>
+                <p className="text-xs text-slate-300 leading-relaxed">{loadError}</p>
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleRetryViewer}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0788C9] hover:bg-[#0671A8] text-white text-xs font-bold cursor-pointer transition"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                    Retry 3D Viewer
+                  </button>
+                  <a
+                    href={initialSrc}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                    Open Direct Viewer
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="max-w-md space-y-3">
+                <div className="w-10 h-10 mx-auto rounded-full border-2 border-sky-500/30 border-t-sky-400 animate-spin" />
+                <div>
+                  <p className="text-sm font-bold text-slate-100">
+                    {isBooting || iframeLoaded
+                      ? 'Initializing 3D Geospatial Engine...'
+                      : 'Loading 3D GIS Engine & Terrain Assets...'}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {isBooting || iframeLoaded
+                      ? 'Setting up Cesium WebGL globe, satellite imagery & 28 AP districts'
+                      : 'Streaming Cesium WebGL runtime & 3D district spatial layers'}
+                  </p>
+                </div>
+                {slowLoad && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleRetryViewer}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                      Retry 3D Viewer
+                    </button>
+                    <a
+                      href={initialSrc}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 text-xs font-semibold transition"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                      Open in New Tab
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -88,7 +88,7 @@ export default function FullScreenExplorer3DPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-2 overflow-hidden">
+      <main className="flex-1 p-2 overflow-hidden flex flex-col">
         <Hero3DGisView
           mode={selectedDistrict ? 'district' : 'state'}
           districtName={matchedDist?.district || selectedDistrict || undefined}
@@ -97,7 +97,7 @@ export default function FullScreenExplorer3DPage() {
           centerLng={matchedDist?.centerLng}
           facilities={facilities}
           pendingFlyTo={pendingFlyTo}
-          className="h-full rounded-2xl"
+          className="flex-1 rounded-2xl"
         />
       </main>
     </div>

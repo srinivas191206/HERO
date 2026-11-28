@@ -78,10 +78,29 @@ function updateCursorHUD(coords) {
   if (cameraAltEl) cameraAltEl.textContent = formatAltitude(coords.cameraAltitude);
 }
 
+async function waitForViewportDimensions(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  for (let i = 0; i < 20; i += 1) {
+    if (el.clientWidth > 0 && el.clientHeight > 0) return;
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  }
+}
+
 async function startApplication() {
+  const notifyParent = (message) => {
+    if (window.parent && window.parent !== window && window.location.origin !== 'null') {
+      window.parent.postMessage(message, window.location.origin);
+    }
+  };
+
   try {
+    notifyParent({ type: 'HERO_GIS_BOOTING' });
     if (loadingText) loadingText.textContent = 'Initializing 3D Geospatial Engine...';
     if (loadingSub) loadingSub.textContent = 'Setting up Cesium WebGL viewport & atmospheric lighting...';
+
+    // Ensure embedded iframe container has non-zero layout dimensions before WebGL context creation
+    await waitForViewportDimensions('cesium-container');
 
     // 1. Initialize Cesium Globe
     viewer = await initCesiumViewer('cesium-container', updateCursorHUD);
@@ -409,6 +428,15 @@ async function startApplication() {
     console.error("Initialization error:", err);
     if (loadingText) loadingText.textContent = "Error initializing 3D GIS";
     if (loadingSub) loadingSub.textContent = err.message || "Please reload.";
+    if (window.parent && window.parent !== window && window.location.origin !== 'null') {
+      window.parent.postMessage(
+        {
+          type: 'HERO_GIS_ERROR',
+          payload: { message: err?.message || 'Error initializing 3D GIS' }
+        },
+        window.location.origin
+      );
+    }
   }
 }
 
