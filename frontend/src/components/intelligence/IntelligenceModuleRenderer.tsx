@@ -38,7 +38,14 @@ export const IntelligenceModuleRenderer: React.FC<IntelligenceModuleRendererProp
     case 'urban_flood':
       return <UrbanFloodIntelligence incidents={incidents} onInspectIn3D={onInspectIn3D} />;
     case 'landslide':
-      return <LandslideIntelligence onInspectIn3D={onInspectIn3D} />;
+      return (
+        <LandslideIntelligence
+          districts={districts}
+          officers={officers}
+          incidents={incidents}
+          onInspectIn3D={onInspectIn3D}
+        />
+      );
     default:
       return null;
   }
