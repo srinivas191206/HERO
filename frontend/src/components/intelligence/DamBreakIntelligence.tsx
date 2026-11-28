@@ -1,11 +1,16 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Compass, Droplets, MapPin, RefreshCw, ShieldAlert, Waves } from 'lucide-react';
-import { HUDPanel } from '../ui/HUDPanel';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IntelligenceLeafletMap, MapMarkerSpec, MapPolygonSpec, MapPolylineSpec } from './IntelligenceLeafletMap';
 import { fetchPointWeather, fetchRiverDischarge, PointWeatherTelemetry, RiverDischargeTelemetry } from '../../services/intelligence/OpenMeteoService';
 import { sampleTerrainAndSlope } from '../../services/intelligence/TerrariumElevationService';
+import { DamSimulationControls, TelemetryState } from './DamSimulationControls';
+import {
+  AssessedSettlement,
+  DownstreamImpactPanel,
+  RiskSeverity,
+  SettlementSortKey
+} from './DownstreamImpactPanel';
 
 interface DamProfile {
   id: string;
@@ -136,6 +141,23 @@ const AP_DAMS: DamProfile[] = [
   }
 ];
 
+function classifySettlementSeverity(breachRatio: number, surgeMeters: number, etaMins: number): {
+  severity: RiskSeverity;
+  rank: number;
+} {
+  // Derive severity strictly from existing scenario controls + computed arrival time
+  if (breachRatio >= 75 || surgeMeters >= 12 || (breachRatio >= 50 && etaMins <= 30)) {
+    return { severity: 'critical', rank: 4 };
+  }
+  if (breachRatio >= 50 || surgeMeters >= 7.5 || etaMins <= 60) {
+    return { severity: 'high', rank: 3 };
+  }
+  if (breachRatio >= 30 || surgeMeters >= 4.5) {
+    return { severity: 'moderate', rank: 2 };
+  }
+  return { severity: 'low', rank: 1 };
+}
+
 interface DamBreakIntelligenceProps {
   onInspectIn3D?: (target: { id: string; name: string; lat: number; lng: number; kind: 'station' | 'shelter' | 'incident' | 'landmark'; description: string }) => void;
 }
@@ -144,35 +166,100 @@ export const DamBreakIntelligence: React.FC<DamBreakIntelligenceProps> = ({ onIn
   const [selectedDamId, setSelectedDamId] = useState<string>('polavaram');
   const [breachRatio, setBreachRatio] = useState<number>(50);
   const [surgeMeters, setSurgeMeters] = useState<number>(7.5);
+  const [sortBy, setSortBy] = useState<SettlementSortKey>('risk');
+  const [selectedSettlementName, setSelectedSettlementName] = useState<string | null>(null);
+
   const [discharge, setDischarge] = useState<RiverDischargeTelemetry | null>(null);
+  const [glofasStatus, setGlofasStatus] = useState<TelemetryState>('loading');
+  const [glofasError, setGlofasError] = useState<string | null>(null);
+
   const [weather, setWeather] = useState<PointWeatherTelemetry | null>(null);
+  const [weatherStatus, setWeatherStatus] = useState<TelemetryState>('loading');
+
   const [damElevation, setDamElevation] = useState<number | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [terrainSource, setTerrainSource] = useState<'aws-terrarium' | 'fallback'>('fallback');
+  const [lastSyncedLabel, setLastSyncedLabel] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const fetchSeqRef = useRef<number>(0);
 
   const dam = useMemo(() => AP_DAMS.find(d => d.id === selectedDamId) || AP_DAMS[0], [selectedDamId]);
 
-  const loadTelemetry = async () => {
-    setLoading(true);
+  const executeTelemetryFetch = useCallback(async (lat: number, lng: number, frlMeters: number) => {
+    const seq = ++fetchSeqRef.current;
+
     try {
-      const [disData, wData, terr] = await Promise.all([
-        fetchRiverDischarge(dam.lat, dam.lng).catch(() => null),
-        fetchPointWeather(dam.lat, dam.lng).catch(() => null),
-        sampleTerrainAndSlope(dam.lat, dam.lng, dam.frlMeters)
+      const [disRes, weatherRes, terrainRes] = await Promise.allSettled([
+        fetchRiverDischarge(lat, lng),
+        fetchPointWeather(lat, lng),
+        sampleTerrainAndSlope(lat, lng, frlMeters)
       ]);
-      setDischarge(disData);
-      setWeather(wData);
-      setDamElevation(terr.elevationMeters);
+
+      if (seq !== fetchSeqRef.current) return;
+
+      if (disRes.status === 'fulfilled') {
+        setDischarge(disRes.value);
+        setGlofasStatus(disRes.value.dates.length === 0 ? 'unavailable' : 'live');
+        setGlofasError(
+          disRes.value.dates.length === 0 ? 'No GLOFAS series points returned for coordinates' : null
+        );
+      } else {
+        setDischarge(null);
+        setGlofasStatus('error');
+        setGlofasError(
+          disRes.reason instanceof Error ? disRes.reason.message : 'GLOFAS API request failed'
+        );
+      }
+
+      if (weatherRes.status === 'fulfilled') {
+        setWeather(weatherRes.value);
+        setWeatherStatus('live');
+      } else {
+        setWeather(null);
+        setWeatherStatus('unavailable');
+      }
+
+      if (terrainRes.status === 'fulfilled') {
+        setDamElevation(terrainRes.value.elevationMeters);
+        setTerrainSource(terrainRes.value.source);
+      }
+
+      if (disRes.status === 'fulfilled' || weatherRes.status === 'fulfilled') {
+        setLastSyncedLabel(
+          new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        );
+      }
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadTelemetry();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dam.id]);
+    void executeTelemetryFetch(dam.lat, dam.lng, dam.frlMeters);
+  }, [dam.lat, dam.lng, dam.frlMeters, executeTelemetryFetch]);
 
-  // Simulated hydrodynamic breach metrics
+  const handleRefresh = useCallback(() => {
+    setLoading(true);
+    setGlofasStatus(prev => (prev === 'live' ? 'live' : 'loading'));
+    setWeatherStatus(prev => (prev === 'live' ? 'live' : 'loading'));
+    setGlofasError(null);
+    void executeTelemetryFetch(dam.lat, dam.lng, dam.frlMeters);
+  }, [dam.lat, dam.lng, dam.frlMeters, executeTelemetryFetch]);
+
+  const handleSelectDam = (nextDamId: string) => {
+    setSelectedDamId(nextDamId);
+    setSelectedSettlementName(null);
+    setLoading(true);
+    setDischarge(null);
+    setWeather(null);
+    setDamElevation(null);
+    setGlofasStatus('loading');
+    setWeatherStatus('loading');
+    setGlofasError(null);
+  };
+
+  // Simulated hydrodynamic breach metrics (original model preserved)
   const simulatedPeakCumecs = useMemo(() => {
     const base = discharge?.peak7dDischarge || 1200;
     const breachOutflow = dam.capacityTmc * 180 * (breachRatio / 100) * (surgeMeters / 8);
@@ -184,7 +271,41 @@ export const DamBreakIntelligence: React.FC<DamBreakIntelligenceProps> = ({ onIn
     return Math.round(dam.downstreamRegions.reduce((s, r) => s + r.population, 0) * factor);
   }, [dam, breachRatio, surgeMeters]);
 
-  // Build downstream inundation polygon envelope scaled by breach severity
+  const waveSpeedKmh = 18 + (surgeMeters * 0.9);
+  const waveSeverity = useMemo<RiskSeverity>(() => {
+    if (breachRatio >= 75 || surgeMeters >= 12) return 'critical';
+    if (breachRatio >= 50 || surgeMeters >= 7.5) return 'high';
+    if (breachRatio >= 30 || surgeMeters >= 4.5) return 'moderate';
+    return 'low';
+  }, [breachRatio, surgeMeters]);
+
+  const assessedSettlements = useMemo<AssessedSettlement[]>(() => {
+    const items = dam.downstreamRegions.map((reg, index) => {
+      const etaMins = Math.round((reg.distanceKm / waveSpeedKmh) * 60);
+      const { severity, rank } = classifySettlementSeverity(breachRatio, surgeMeters, etaMins);
+      return {
+        index,
+        ...reg,
+        etaMins,
+        severity,
+        severityRank: rank
+      };
+    });
+
+    return items.sort((a, b) => {
+      if (sortBy === 'eta') return a.etaMins - b.etaMins;
+      if (sortBy === 'population') return b.population - a.population;
+      if (b.severityRank !== a.severityRank) return b.severityRank - a.severityRank;
+      return a.etaMins - b.etaMins;
+    });
+  }, [dam.downstreamRegions, waveSpeedKmh, breachRatio, surgeMeters, sortBy]);
+
+  const selectedSettlement = useMemo(
+    () => dam.downstreamRegions.find(r => r.name === selectedSettlementName) || null,
+    [dam.downstreamRegions, selectedSettlementName]
+  );
+
+  // Build downstream inundation polygon envelope & markers scaled by breach severity
   const { polygons, polylines, markers } = useMemo(() => {
     const spreadDeg = 0.02 + (breachRatio / 100) * 0.035 + (surgeMeters / 18) * 0.03;
     const upperBank: Array<[number, number]> = dam.corridor.map(([la, ln], i) => [la + spreadDeg * (0.4 + i * 0.12), ln - spreadDeg * 0.5]);
@@ -229,6 +350,7 @@ export const DamBreakIntelligence: React.FC<DamBreakIntelligenceProps> = ({ onIn
     ];
 
     dam.downstreamRegions.forEach((reg, idx) => {
+      const isFocused = selectedSettlementName === reg.name;
       mks.push({
         id: `zone-${idx}`,
         lat: reg.lat,
@@ -236,8 +358,10 @@ export const DamBreakIntelligence: React.FC<DamBreakIntelligenceProps> = ({ onIn
         title: reg.name,
         subtitle: `${reg.distanceKm} km downstream • Pop ${reg.population.toLocaleString()} • ${reg.criticalInfra}`,
         badge: `Z${idx + 1}`,
-        color: '#f59e0b',
-        radius: 11
+        color: isFocused ? '#0788C9' : '#f59e0b',
+        radius: isFocused ? 13 : 11,
+        pulse: isFocused,
+        onClick: () => setSelectedSettlementName(reg.name)
       });
       mks.push({
         id: `shelter-${idx}`,
@@ -252,207 +376,94 @@ export const DamBreakIntelligence: React.FC<DamBreakIntelligenceProps> = ({ onIn
     });
 
     return { polygons: polys, polylines: lines, markers: mks };
-  }, [dam, breachRatio, surgeMeters, simulatedPeakCumecs]);
+  }, [dam, breachRatio, surgeMeters, simulatedPeakCumecs, selectedSettlementName]);
 
-  const waveSpeedKmh = 18 + (surgeMeters * 0.9);
+  const mapCenter: [number, number] = selectedSettlement
+    ? [selectedSettlement.lat, selectedSettlement.lng]
+    : [dam.lat - 0.14, dam.lng + 0.12];
+  const mapZoom = selectedSettlement ? 11 : 9;
+
+  const damElevationLabel = `${damElevation ?? dam.frlMeters}m${terrainSource === 'aws-terrarium' ? ' (DEM)' : ''}`;
 
   return (
-    <div className="space-y-5">
-      {/* Header & Reservoir Controls */}
-      <HUDPanel
-        title="Dam Break & Inundation Intelligence"
-        subtitle="Hydrodynamic Breach Modelling, Downstream Arrival & Evacuation Planning (Open-Meteo GloFAS + AWS DEM)"
-        statusColor={breachRatio >= 75 ? 'red' : 'amber'}
-        headerRight={
-          <div className="flex items-center gap-2">
-            {onInspectIn3D && (
-              <button
-                type="button"
-                onClick={() =>
-                  onInspectIn3D({
-                    id: dam.id,
-                    name: dam.name,
-                    lat: dam.lat,
-                    lng: dam.lng,
-                    kind: 'station',
-                    description: `${dam.river} • FRL ${dam.frlMeters}m • Simulated ${simulatedPeakCumecs} m³/s`
-                  })
-                }
-                className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
-              >
-                <Compass className="w-3.5 h-3.5" />
-                Inspect Dam in 3D
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={loadTelemetry}
-              className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 cursor-pointer"
-              title="Refresh GloFAS River Discharge"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+    <div className="space-y-4">
+      {/* Top Header + 4-Group Simulation Control Workspace */}
+      <DamSimulationControls
+        dams={AP_DAMS}
+        selectedDamId={selectedDamId}
+        activeDam={dam}
+        onSelectDam={handleSelectDam}
+        breachRatio={breachRatio}
+        onChangeBreachRatio={setBreachRatio}
+        surgeMeters={surgeMeters}
+        onChangeSurgeMeters={setSurgeMeters}
+        discharge={discharge}
+        glofasStatus={glofasStatus}
+        glofasError={glofasError}
+        simulatedPeakCumecs={simulatedPeakCumecs}
+        affectedPopTotal={affectedPopTotal}
+        loading={loading}
+        onRefresh={handleRefresh}
+        onInspectDamIn3D={
+          onInspectIn3D
+            ? () =>
+                onInspectIn3D({
+                  id: dam.id,
+                  name: dam.name,
+                  lat: dam.lat,
+                  lng: dam.lng,
+                  kind: 'station',
+                  description: `${dam.river} • FRL ${dam.frlMeters}m • Simulated ${simulatedPeakCumecs} m³/s`
+                })
+            : undefined
         }
-      >
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 text-xs">
-          <div>
-            <label htmlFor="dam-select" className="text-[10px] font-black uppercase text-slate-500 block mb-1">
-              Target Reservoir / Barrage
-            </label>
-            <select
-              id="dam-select"
-              value={selectedDamId}
-              onChange={e => setSelectedDamId(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer"
-            >
-              {AP_DAMS.map(d => (
-                <option key={d.id} value={d.id}>
-                  {d.name} ({d.district})
-                </option>
-              ))}
-            </select>
-          </div>
+      />
 
-          <div>
-            <label htmlFor="breach-range" className="text-[10px] font-black uppercase text-slate-500 flex justify-between mb-1">
-              <span>Gate / Breach Scenario</span>
-              <span className="font-mono text-red-600 font-black">{breachRatio}%</span>
-            </label>
-            <input
-              id="breach-range"
-              type="range"
-              min={15}
-              max={100}
-              step={5}
-              value={breachRatio}
-              onChange={e => setBreachRatio(Number(e.target.value))}
-              className="w-full mt-2 cursor-pointer"
-            />
-            <div className="flex justify-between text-[9px] text-slate-400 font-bold mt-0.5">
-              <span>Spillway Release</span>
-              <span>Full Breach</span>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="surge-range" className="text-[10px] font-black uppercase text-slate-500 flex justify-between mb-1">
-              <span>Downstream Stage Rise</span>
-              <span className="font-mono text-sky-700 font-black">+{surgeMeters.toFixed(1)} m</span>
-            </label>
-            <input
-              id="surge-range"
-              type="range"
-              min={2}
-              max={18}
-              step={0.5}
-              value={surgeMeters}
-              onChange={e => setSurgeMeters(Number(e.target.value))}
-              className="w-full mt-2 cursor-pointer"
-            />
-            <div className="flex justify-between text-[9px] text-slate-400 font-bold mt-0.5">
-              <span>+2m Watch</span>
-              <span>+18m Catastrophic</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-sky-50 border border-sky-200 rounded-xl p-2.5">
-              <span className="text-[9px] font-black uppercase text-sky-700 block">LIVE GLOFAS FLOW</span>
-              <span className="text-sm font-black font-mono text-slate-800">
-                {discharge ? `${discharge.currentDischarge.toFixed(1)} m³/s` : 'Loading...'}
-              </span>
-              <span className="text-[9px] text-slate-500 block">7d peak: {discharge ? `${discharge.peak7dDischarge.toFixed(1)}` : '--'} m³/s</span>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-xl p-2.5">
-              <span className="text-[9px] font-black uppercase text-red-700 block">SIMULATED SURGE</span>
-              <span className="text-sm font-black font-mono text-red-700">
-                {simulatedPeakCumecs.toLocaleString()} m³/s
-              </span>
-              <span className="text-[9px] text-red-600 block">Est. exposed: ~{affectedPopTotal.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-      </HUDPanel>
-
-      {/* Map + Downstream Regions / Evacuation Panel */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2 h-[460px]">
+      {/* Main Two-Column Operational Workspace: Left Map (65-70%) + Right Impact Panel (30-35%) */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+        <div className="xl:col-span-8 bg-white border border-slate-200 rounded-2xl p-2 shadow-xs h-[460px] sm:h-[520px] xl:h-[580px] min-h-[420px]">
           <IntelligenceLeafletMap
-            center={[dam.lat - 0.14, dam.lng + 0.12]}
-            zoom={9}
+            center={mapCenter}
+            zoom={mapZoom}
             polygons={polygons}
             polylines={polylines}
             markers={markers}
+            className="h-full rounded-xl border-slate-100"
           />
         </div>
 
-        <HUDPanel
-          title="Downstream Impact & Evacuation"
-          subtitle={`${dam.river} • Dam Elev: ${damElevation ?? dam.frlMeters}m • Upstream 24h Rain: ${weather?.next24hRainMm ?? 0} mm`}
-          className="h-[460px]"
-        >
-          <div className="space-y-3 overflow-y-auto pr-1 h-full text-xs">
-            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-2 text-[11px] font-bold">
-              <Waves className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              <span>Flood Front Velocity: ~{waveSpeedKmh.toFixed(1)} km/h downstream</span>
-            </div>
-
-            {dam.downstreamRegions.map((reg, idx) => {
-              const etaMins = Math.round((reg.distanceKm / waveSpeedKmh) * 60);
-              return (
-                <div key={reg.name} className="border border-slate-200 rounded-2xl p-3 bg-slate-50/70 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-slate-800 flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-                      {reg.name}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-mono font-black text-[10px]">
-                      ETA {etaMins} min
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-slate-600">
-                    <strong>Distance:</strong> {reg.distanceKm} km • <strong>Pop:</strong> {reg.population.toLocaleString()}
-                  </div>
-                  <div className="text-[10.5px] text-slate-500">
-                    <strong>Exposed Assets:</strong> {reg.criticalInfra}
-                  </div>
-                  <div className="pt-1.5 border-t border-slate-200 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
-                      <ShieldAlert className="w-3 h-3" />
-                      Evacuate to: {reg.shelterName}
-                    </span>
-                    {onInspectIn3D && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onInspectIn3D({
-                            id: `shelter-${dam.id}-${idx}`,
-                            name: reg.shelterName,
-                            lat: reg.shelterLat,
-                            lng: reg.shelterLng,
-                            kind: 'shelter',
-                            description: `Evacuation Camp for ${reg.name}`
-                          })
-                        }
-                        className="px-2 py-0.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase cursor-pointer"
-                      >
-                        3D View
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-[10px] text-slate-500 flex items-center gap-2">
-              <Droplets className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
-              <span>
-                Soil saturation near dam: {weather?.soilMoistureTop != null ? `${(weather.soilMoistureTop * 100).toFixed(1)}%` : 'Syncing...'} • Wind {weather?.windSpeedKmh ?? '--'} km/h
-              </span>
-            </div>
-          </div>
-        </HUDPanel>
+        <div className="xl:col-span-4 min-w-0">
+          <DownstreamImpactPanel
+            river={dam.river}
+            damElevationLabel={damElevationLabel}
+            weather={weather}
+            weatherStatus={weatherStatus}
+            lastSyncedLabel={lastSyncedLabel}
+            waveSpeedKmh={waveSpeedKmh}
+            waveSeverity={waveSeverity}
+            settlements={assessedSettlements}
+            sortBy={sortBy}
+            onChangeSortBy={setSortBy}
+            selectedSettlementName={selectedSettlementName}
+            onSelectSettlement={(settlement) =>
+              setSelectedSettlementName(prev => (prev === settlement.name ? null : settlement.name))
+            }
+            onResetMapFocus={() => setSelectedSettlementName(null)}
+            onInspectSettlementIn3D={
+              onInspectIn3D
+                ? (settlement) =>
+                    onInspectIn3D({
+                      id: `shelter-${dam.id}-${settlement.index}`,
+                      name: settlement.shelterName,
+                      lat: settlement.shelterLat,
+                      lng: settlement.shelterLng,
+                      kind: 'shelter',
+                      description: `Evacuation Camp for ${settlement.name}`
+                    })
+                : undefined
+            }
+          />
+        </div>
       </div>
     </div>
   );
