@@ -1,15 +1,21 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Compass, Navigation, RefreshCw, Route } from 'lucide-react';
-import { HUDPanel } from '../ui/HUDPanel';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IntelligenceLeafletMap, MapMarkerSpec, MapPolygonSpec, MapPolylineSpec } from './IntelligenceLeafletMap';
 import { fetchPointWeather, PointWeatherTelemetry } from '../../services/intelligence/OpenMeteoService';
 import { sampleTerrainAndSlope } from '../../services/intelligence/TerrariumElevationService';
+import { Incident } from '../../types';
+import { getTacticalFacilitiesForDistrict, matchApDistrict } from '../../utils/apDistricts';
+import { UrbanFloodControls, UrbanTelemetryStatus } from './UrbanFloodControls';
+import { EvaluatedUrbanSegment, StreetDrainageFeedPanel } from './StreetDrainageFeedPanel';
+import { EmergencyRoutePanel } from './EmergencyRoutePanel';
+import { WaterloggingSimulatorCard } from './WaterloggingSimulatorCard';
+import { DrainageInfrastructurePanel, VerifiedHospitalFacility } from './DrainageInfrastructurePanel';
 
 interface UrbanCorridor {
   id: string;
   city: string;
+  districtKey: string;
   lat: number;
   lng: number;
   drainCapacityMmHr: number;
@@ -27,6 +33,7 @@ const AP_URBAN_HUBS: UrbanCorridor[] = [
   {
     id: 'eluru',
     city: 'Eluru Urban (Tammileru & Eluru Canal)',
+    districtKey: 'Eluru',
     lat: 16.7107,
     lng: 81.0952,
     drainCapacityMmHr: 32,
@@ -39,6 +46,7 @@ const AP_URBAN_HUBS: UrbanCorridor[] = [
   {
     id: 'vijayawada',
     city: 'Vijayawada (Budameru & Krishnalanka)',
+    districtKey: 'NTR',
     lat: 16.5062,
     lng: 80.648,
     drainCapacityMmHr: 35,
@@ -51,6 +59,7 @@ const AP_URBAN_HUBS: UrbanCorridor[] = [
   {
     id: 'kakinada',
     city: 'Kakinada (Salt Creek & Bhanugudi)',
+    districtKey: 'Kakinada',
     lat: 16.974,
     lng: 82.245,
     drainCapacityMmHr: 38,
@@ -63,6 +72,7 @@ const AP_URBAN_HUBS: UrbanCorridor[] = [
   {
     id: 'visakhapatnam',
     city: 'Visakhapatnam (Gajuwaka & Poorna Market)',
+    districtKey: 'Visakhapatnam',
     lat: 17.7231,
     lng: 83.3013,
     drainCapacityMmHr: 42,
@@ -75,6 +85,7 @@ const AP_URBAN_HUBS: UrbanCorridor[] = [
   {
     id: 'guntur',
     city: 'Guntur (Brodipet & Nallapadu)',
+    districtKey: 'Guntur',
     lat: 16.3067,
     lng: 80.4365,
     drainCapacityMmHr: 30,
@@ -87,6 +98,7 @@ const AP_URBAN_HUBS: UrbanCorridor[] = [
   {
     id: 'tirupati',
     city: 'Tirupati (Kapila Theertham & Town)',
+    districtKey: 'Tirupati',
     lat: 13.6288,
     lng: 79.4192,
     drainCapacityMmHr: 36,
@@ -98,44 +110,199 @@ const AP_URBAN_HUBS: UrbanCorridor[] = [
   }
 ];
 
-interface UrbanFloodIntelligenceProps {
-  onInspectIn3D?: (target: { id: string; name: string; lat: number; lng: number; kind: 'incident' | 'station'; floor?: string; districtName?: string; description: string }) => void;
+function computePathKm(path: Array<[number, number]>): number {
+  let total = 0;
+  const R = 6371;
+  for (let i = 1; i < path.length; i += 1) {
+    const [lat1, lon1] = path[i - 1];
+    const [lat2, lon2] = path[i];
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    total += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  return Number(total.toFixed(2));
 }
 
-export const UrbanFloodIntelligence: React.FC<UrbanFloodIntelligenceProps> = ({ onInspectIn3D }) => {
+interface UrbanFloodIntelligenceProps {
+  incidents?: Incident[];
+  onInspectIn3D?: (target: {
+    id: string;
+    name: string;
+    lat: number;
+    lng: number;
+    kind: 'incident' | 'station';
+    floor?: string;
+    districtName?: string;
+    description: string;
+  }) => void;
+}
+
+export const UrbanFloodIntelligence: React.FC<UrbanFloodIntelligenceProps> = ({
+  incidents = [],
+  onInspectIn3D
+}) => {
   const [selectedCityId, setSelectedCityId] = useState<string>('eluru');
   const [waterDepthM, setWaterDepthM] = useState<number>(0.7);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [focusedCoord, setFocusedCoord] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
+
+  const [showBlockedLayer, setShowBlockedLayer] = useState<boolean>(true);
+  const [showSafeLayer, setShowSafeLayer] = useState<boolean>(true);
+  const [showDrainLayer, setShowDrainLayer] = useState<boolean>(true);
+  const [showFacilitiesLayer, setShowFacilitiesLayer] = useState<boolean>(true);
+
   const [weather, setWeather] = useState<PointWeatherTelemetry | null>(null);
+  const [weatherStatus, setWeatherStatus] = useState<UrbanTelemetryStatus>('loading');
   const [microElevM, setMicroElevM] = useState<number | null>(null);
-  const [kakinadaRoadsGj, setKakinadaRoadsGj] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [terrainSource, setTerrainSource] = useState<'aws-terrarium' | 'fallback'>('fallback');
+  const [kakinadaRoadsGj, setKakinadaRoadsGj] = useState<unknown>(null);
+  const [kakinadaHospitals, setKakinadaHospitals] = useState<VerifiedHospitalFacility[]>([]);
+  const [lastSyncedLabel, setLastSyncedLabel] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const fetchSeqRef = useRef<number>(0);
 
-  const hub = useMemo(() => AP_URBAN_HUBS.find(u => u.id === selectedCityId) || AP_URBAN_HUBS[0], [selectedCityId]);
+  const hub = useMemo(
+    () => AP_URBAN_HUBS.find(u => u.id === selectedCityId) || AP_URBAN_HUBS[0],
+    [selectedCityId]
+  );
 
-  const loadCityTelemetry = async () => {
-    setLoading(true);
-    try {
-      const [w, t] = await Promise.all([
-        fetchPointWeather(hub.lat, hub.lng).catch(() => null),
-        sampleTerrainAndSlope(hub.lat, hub.lng, 18)
-      ]);
-      setWeather(w);
-      setMicroElevM(t.elevationMeters);
-      if (hub.id === 'kakinada' && !kakinadaRoadsGj) {
+  const executeTelemetryFetch = useCallback(async (lat: number, lng: number, cityId: string, hasRoads: boolean, hasHosp: boolean) => {
+    const seq = ++fetchSeqRef.current;
+
+    if (cityId === 'kakinada') {
+      if (!hasRoads) {
         fetch('/gis-3d/data/kakinada_roads.geojson')
           .then(r => (r.ok ? r.json() : null))
-          .then(gj => gj && setKakinadaRoadsGj(gj))
+          .then(gj => {
+            if (gj) setKakinadaRoadsGj(gj);
+          })
           .catch(() => {});
       }
-    } finally {
-      setLoading(false);
+      if (!hasHosp) {
+        fetch('/gis-3d/data/unified_hospitals.geojson')
+          .then(r => (r.ok ? r.json() : null))
+          .then((gj: { features?: Array<{ geometry?: { coordinates?: [number, number] }; properties?: { name?: string; address?: string; emergency?: string } }> } | null) => {
+            if (!gj?.features) return;
+            const parsed: VerifiedHospitalFacility[] = gj.features
+              .filter(f => Array.isArray(f.geometry?.coordinates) && f.geometry!.coordinates!.length >= 2)
+              .map(f => ({
+                name: f.properties?.name || 'Verified Hospital',
+                address: f.properties?.address,
+                emergency: f.properties?.emergency,
+                lat: f.geometry!.coordinates![1],
+                lng: f.geometry!.coordinates![0]
+              }));
+            setKakinadaHospitals(parsed);
+          })
+          .catch(() => {});
+      }
     }
-  };
+
+    try {
+      const [wRes, tRes] = await Promise.allSettled([
+        fetchPointWeather(lat, lng),
+        sampleTerrainAndSlope(lat, lng, 18)
+      ]);
+
+      if (seq !== fetchSeqRef.current) return;
+
+      if (wRes.status === 'fulfilled') {
+        setWeather(wRes.value);
+        setWeatherStatus('live');
+      } else {
+        setWeather(null);
+        setWeatherStatus('error');
+      }
+
+      if (tRes.status === 'fulfilled') {
+        setMicroElevM(tRes.value.elevationMeters);
+        setTerrainSource(tRes.value.source);
+      }
+
+      setLastSyncedLabel(
+        new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      );
+    } finally {
+      if (seq === fetchSeqRef.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    loadCityTelemetry();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hub.id]);
+    const timer = setTimeout(() => {
+      void executeTelemetryFetch(
+        hub.lat,
+        hub.lng,
+        hub.id,
+        Boolean(kakinadaRoadsGj),
+        kakinadaHospitals.length > 0
+      );
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [hub.id, hub.lat, hub.lng, executeTelemetryFetch, kakinadaRoadsGj, kakinadaHospitals.length]);
+
+  const handleSelectCity = (nextCityId: string) => {
+    setSelectedCityId(nextCityId);
+    setSelectedSegmentId(null);
+    setFocusedCoord(null);
+    setLoading(true);
+    setWeatherStatus('loading');
+  };
+
+  const handleRefresh = () => {
+    setLoading(true);
+    setWeatherStatus(prev => (prev === 'live' ? 'live' : 'loading'));
+    void executeTelemetryFetch(
+      hub.lat,
+      hub.lng,
+      hub.id,
+      Boolean(kakinadaRoadsGj),
+      kakinadaHospitals.length > 0
+    );
+  };
+
+  const evaluatedSegments: EvaluatedUrbanSegment[] = useMemo(() => {
+    return hub.segments.map(seg => {
+      const isFlooded = waterDepthM >= seg.thresholdDepthM;
+      const isCaution = !isFlooded && waterDepthM >= seg.thresholdDepthM * 0.75;
+      const mid = seg.path[Math.floor(seg.path.length / 2)];
+      return {
+        ...seg,
+        lat: mid[0],
+        lng: mid[1],
+        lengthKm: computePathKm(seg.path),
+        isFlooded,
+        status: isFlooded ? 'IMPASSABLE' : isCaution ? 'CAUTION' : 'OPEN'
+      };
+    });
+  }, [hub, waterDepthM]);
+
+  const tacticalFacilities = useMemo(
+    () => getTacticalFacilitiesForDistrict(hub.districtKey, hub.lat, hub.lng),
+    [hub.districtKey, hub.lat, hub.lng]
+  );
+
+  const verifiedHospitals = useMemo(
+    () => (hub.id === 'kakinada' ? kakinadaHospitals : []),
+    [hub.id, kakinadaHospitals]
+  );
+
+  const corridorIncidents = useMemo(() => {
+    return incidents.filter(inc => {
+      if (inc.status === 'Resolved') return false;
+      return (
+        matchApDistrict(inc.districtId)?.district === hub.districtKey ||
+        matchApDistrict(inc.title)?.district === hub.districtKey
+      );
+    });
+  }, [incidents, hub.districtKey]);
 
   const { polygons, polylines, markers, floodedCount, safeCount } = useMemo(() => {
     let fCount = 0;
@@ -144,32 +311,42 @@ export const UrbanFloodIntelligence: React.FC<UrbanFloodIntelligenceProps> = ({ 
     const lines: MapPolylineSpec[] = [];
     const mks: MapMarkerSpec[] = [];
 
-    hub.segments.forEach(seg => {
-      const isFlooded = waterDepthM >= seg.thresholdDepthM;
-      if (isFlooded) fCount++;
-      else sCount++;
+    evaluatedSegments.forEach(seg => {
+      if (seg.isFlooded) fCount += 1;
+      else sCount += 1;
 
-      const color = isFlooded ? '#ef4444' : seg.role === 'safe_evac' ? '#10b981' : '#f59e0b';
+      const isSelected = selectedSegmentId === seg.id;
+      const visibleByLayer =
+        (seg.isFlooded && showBlockedLayer) ||
+        (seg.role === 'safe_evac' && !seg.isFlooded && showSafeLayer) ||
+        (!seg.isFlooded && seg.role !== 'safe_evac' && showDrainLayer);
+
+      if (!visibleByLayer && !isSelected) return;
+
+      const color = seg.isFlooded ? '#ef4444' : seg.role === 'safe_evac' ? '#10b981' : '#f59e0b';
       lines.push({
         id: seg.id,
         positions: seg.path,
-        color,
-        weight: isFlooded ? 6 : 5,
-        dashArray: isFlooded ? '8, 6' : undefined,
-        title: `${seg.name} — ${isFlooded ? 'FLOODED / IMPASSABLE' : 'PASSABLE'}`,
-        subtitle: `${seg.note} (Flood threshold ${seg.thresholdDepthM}m)`
+        color: isSelected ? '#0B193D' : color,
+        weight: isSelected ? 7 : seg.isFlooded ? 6 : 5,
+        dashArray: seg.isFlooded ? '8, 6' : undefined,
+        title: `${seg.name} — ${seg.isFlooded ? 'FLOODED / IMPASSABLE' : 'PASSABLE'}`,
+        subtitle: `${seg.note} (Flood threshold ${seg.thresholdDepthM}m)`,
+        onClick: () => {
+          setSelectedSegmentId(seg.id);
+          setFocusedCoord({ lat: seg.lat, lng: seg.lng, zoom: 14 });
+        }
       });
 
-      const mid = seg.path[Math.floor(seg.path.length / 2)];
-      if (isFlooded) {
+      if (seg.isFlooded) {
         const pad = 0.0035 + waterDepthM * 0.0015;
         polys.push({
           id: `uf-zone-${seg.id}`,
           positions: [
-            [mid[0] - pad, mid[1] - pad],
-            [mid[0] - pad, mid[1] + pad],
-            [mid[0] + pad, mid[1] + pad],
-            [mid[0] + pad, mid[1] - pad]
+            [seg.lat - pad, seg.lng - pad],
+            [seg.lat - pad, seg.lng + pad],
+            [seg.lat + pad, seg.lng + pad],
+            [seg.lat + pad, seg.lng - pad]
           ],
           color: '#dc2626',
           fillColor: '#ef4444',
@@ -182,169 +359,251 @@ export const UrbanFloodIntelligence: React.FC<UrbanFloodIntelligenceProps> = ({ 
 
       mks.push({
         id: `umk-${seg.id}`,
-        lat: mid[0],
-        lng: mid[1],
+        lat: seg.lat,
+        lng: seg.lng,
         title: seg.name,
-        subtitle: `${isFlooded ? 'Blocked at' : 'Safe up to'} ${seg.thresholdDepthM}m • ${seg.note}`,
-        badge: isFlooded ? 'BLOCKED' : 'CLEAR',
-        color,
-        radius: 12,
-        pulse: isFlooded
+        subtitle: `${seg.isFlooded ? 'Blocked at' : 'Safe up to'} ${seg.thresholdDepthM}m • ${seg.note}`,
+        badge: seg.isFlooded ? 'BLOCKED' : 'CLEAR',
+        color: isSelected ? '#0788C9' : color,
+        radius: isSelected ? 14 : 12,
+        pulse: seg.isFlooded || isSelected,
+        onClick: () => {
+          setSelectedSegmentId(seg.id);
+          setFocusedCoord({ lat: seg.lat, lng: seg.lng, zoom: 14 });
+        }
       });
     });
 
+    if (showFacilitiesLayer) {
+      tacticalFacilities.forEach(fac => {
+        mks.push({
+          id: `uf-fac-${fac.id}`,
+          lat: fac.lat,
+          lng: fac.lng,
+          title: fac.name,
+          subtitle: fac.desc,
+          badge: fac.kind === 'shelter' ? 'SHEL' : fac.kind === 'station' ? 'POL' : 'EOC',
+          color: '#1E3A8A',
+          radius: 9
+        });
+      });
+    }
+
     return { polygons: polys, polylines: lines, markers: mks, floodedCount: fCount, safeCount: sCount };
-  }, [hub, waterDepthM]);
+  }, [
+    evaluatedSegments,
+    selectedSegmentId,
+    waterDepthM,
+    showBlockedLayer,
+    showSafeLayer,
+    showDrainLayer,
+    showFacilitiesLayer,
+    tacticalFacilities
+  ]);
+
+  const mapCenter: [number, number] = focusedCoord
+    ? [focusedCoord.lat, focusedCoord.lng]
+    : [hub.lat, hub.lng];
+  const mapZoom = focusedCoord ? focusedCoord.zoom : 13;
+
+  const focusSegment =
+    evaluatedSegments.find(s => s.id === selectedSegmentId) ||
+    evaluatedSegments.find(s => s.isFlooded) ||
+    evaluatedSegments[0];
 
   return (
-    <div className="space-y-5">
-      <HUDPanel
-        title="Urban Flood Nowcasting System"
-        subtitle="Street-Level Waterlogging, Drainage Capacity, Micro-Topography & Emergency Route Identification"
-        statusColor={floodedCount >= 2 ? 'red' : floodedCount === 1 ? 'amber' : 'green'}
-        headerRight={
-          <div className="flex items-center gap-2">
-            {onInspectIn3D && (
-              <button
-                type="button"
-                onClick={() =>
-                  onInspectIn3D({
-                    id: `urban-${hub.id}`,
-                    name: `${hub.city} Flooded Zone (Safe Floors: Level 1+)`,
-                    lat: hub.lat,
-                    lng: hub.lng,
-                    kind: 'incident',
-                    floor: waterDepthM >= 1.2 ? '2' : '1',
-                    districtName: hub.city.split(' ')[0],
-                    description: `Simulated Street Water Depth ${waterDepthM.toFixed(1)}m • Ground floor submerged, upper levels safe`
-                  })
-                }
-                className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
-              >
-                <Compass className="w-3.5 h-3.5" />
-                Inspect Safe Floor in 3D
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={loadCityTelemetry}
-              className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 cursor-pointer"
-              title="Refresh Urban Rain & DEM"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+    <div className="space-y-4">
+      {/* Top Operations Control Center */}
+      <UrbanFloodControls
+        hubs={AP_URBAN_HUBS}
+        selectedCityId={selectedCityId}
+        activeHub={hub}
+        onSelectCity={handleSelectCity}
+        waterDepthM={waterDepthM}
+        onChangeWaterDepthM={setWaterDepthM}
+        onResetScenario={() => setWaterDepthM(0.1)}
+        weather={weather}
+        weatherStatus={weatherStatus}
+        microElevM={microElevM}
+        terrainSource={terrainSource}
+        floodedCount={floodedCount}
+        safeCount={safeCount}
+        lastSyncedLabel={lastSyncedLabel}
+        loading={loading}
+        onRefresh={handleRefresh}
+        onJumpToSimulator={() => {
+          document.getElementById('waterlogging-scenario-simulator')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest'
+          });
+        }}
+        onJumpToDrainage={() => {
+          document.getElementById('drainage-infrastructure-panel')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest'
+          });
+        }}
+        onInspectIn3D={
+          onInspectIn3D
+            ? () =>
+                onInspectIn3D({
+                  id: `urban-${hub.id}`,
+                  name: `${hub.city} Flooded Zone (Safe Floors: Level 1+)`,
+                  lat: hub.lat,
+                  lng: hub.lng,
+                  kind: 'incident',
+                  floor: waterDepthM >= 1.2 ? '2' : '1',
+                  districtName: hub.districtKey,
+                  description: `Simulated Street Water Depth ${waterDepthM.toFixed(1)}m • Ground floor submerged, upper levels safe`
+                })
+            : undefined
         }
-      >
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs items-center">
-          <div>
-            <label htmlFor="urban-city-select" className="text-[10px] font-black uppercase text-slate-500 block mb-1">
-              AP Municipal Corridor
-            </label>
-            <select
-              id="urban-city-select"
-              value={selectedCityId}
-              onChange={e => setSelectedCityId(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 cursor-pointer"
-            >
-              {AP_URBAN_HUBS.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.city}
-                </option>
-              ))}
-            </select>
-          </div>
+      />
 
-          <div>
-            <label htmlFor="urban-depth-slider" className="text-[10px] font-black uppercase text-slate-500 flex justify-between mb-1">
-              <span>Street Waterlogging Depth</span>
-              <span className="font-mono font-black text-sky-700">{waterDepthM.toFixed(1)} m</span>
-            </label>
-            <input
-              id="urban-depth-slider"
-              type="range"
-              min={0.1}
-              max={2.5}
-              step={0.1}
-              value={waterDepthM}
-              onChange={e => setWaterDepthM(Number(e.target.value))}
-              className="w-full cursor-pointer"
+      {/* Main Two-Column Workspace: Left Protected Operational Map (~67%) + Right Street Feed (~33%) */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+        <div className="xl:col-span-8 bg-white border border-slate-200 rounded-2xl p-2 shadow-xs flex flex-col justify-between gap-2 h-[500px] xl:h-[540px] min-h-[440px]">
+          <div className="flex-1 min-h-0">
+            <IntelligenceLeafletMap
+              center={mapCenter}
+              zoom={mapZoom}
+              geojsonData={hub.id === 'kakinada' ? kakinadaRoadsGj : null}
+              geojsonStyle={() => ({ color: '#64748b', weight: 1.2, opacity: 0.45 })}
+              polygons={polygons}
+              polylines={polylines}
+              markers={markers}
+              className="h-full rounded-xl border-slate-100"
             />
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
-            <span className="text-[9px] font-black uppercase text-slate-400 block">DRAINAGE vs LIVE RAIN</span>
-            <span className="text-sm font-black font-mono text-slate-800">
-              {hub.drainCapacityMmHr} mm/hr cap • {weather?.precipitationMm ?? 0} mm now
-            </span>
-            <span className="text-[9px] text-slate-500 block">DEM micro-elev: {microElevM ?? '--'} m AMSL</span>
-          </div>
+          {/* Integrated Map Legend & Functional Layer Toggles */}
+          <div className="px-2 py-1 flex flex-wrap items-center justify-between gap-2 text-[10.5px] border-t border-slate-100 flex-shrink-0">
+            <span className="font-extrabold text-[#0B193D] uppercase tracking-wider">Map Legend:</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowBlockedLayer(v => !v)}
+                aria-pressed={showBlockedLayer}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border font-semibold cursor-pointer transition ${
+                  showBlockedLayer
+                    ? 'bg-[#FFF3F3] border-[#F8CCCC] text-[#D93636]'
+                    : 'bg-slate-50 border-slate-200 text-slate-400'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" aria-hidden="true" />
+                <span>Blocked / Impassable</span>
+              </button>
 
-          <div className="grid grid-cols-2 gap-2 text-center">
-            <div className="bg-red-50 border border-red-200 rounded-xl p-2">
-              <span className="text-[9px] font-black uppercase text-red-600 block">FLOODED ROADS</span>
-              <span className="text-lg font-black text-red-700">{floodedCount}</span>
-            </div>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2">
-              <span className="text-[9px] font-black uppercase text-emerald-600 block">SAFE ROUTES</span>
-              <span className="text-lg font-black text-emerald-700">{safeCount}</span>
+              <button
+                type="button"
+                onClick={() => setShowSafeLayer(v => !v)}
+                aria-pressed={showSafeLayer}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border font-semibold cursor-pointer transition ${
+                  showSafeLayer
+                    ? 'bg-[#ECFDF5] border-[#BDEBD8] text-[#16A477]'
+                    : 'bg-slate-50 border-slate-200 text-slate-400'
+                }`}
+              >
+                <span className="w-2.5 h-1 rounded bg-[#10b981]" aria-hidden="true" />
+                <span>Accessible / Safe Spine</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDrainLayer(v => !v)}
+                aria-pressed={showDrainLayer}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border font-semibold cursor-pointer transition ${
+                  showDrainLayer
+                    ? 'bg-[#FFFBEB] border-[#FDE68A] text-[#B45309]'
+                    : 'bg-slate-50 border-slate-200 text-slate-400'
+                }`}
+              >
+                <span className="w-2.5 h-1 rounded bg-[#f59e0b]" aria-hidden="true" />
+                <span>Drain / Caution Corridor</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowFacilitiesLayer(v => !v)}
+                aria-pressed={showFacilitiesLayer}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border font-semibold cursor-pointer transition ${
+                  showFacilitiesLayer
+                    ? 'bg-[#EEF4FD] border-[#DCE7F7] text-[#1E3A8A]'
+                    : 'bg-slate-50 border-slate-200 text-slate-400'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-[#1E3A8A]" aria-hidden="true" />
+                <span>Critical Facility</span>
+              </button>
             </div>
           </div>
         </div>
-      </HUDPanel>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2 h-[440px]">
-          <IntelligenceLeafletMap
-            center={[hub.lat, hub.lng]}
-            zoom={13}
-            geojsonData={hub.id === 'kakinada' ? kakinadaRoadsGj : null}
-            geojsonStyle={() => ({ color: '#64748b', weight: 1.2, opacity: 0.45 })}
-            polygons={polygons}
-            polylines={polylines}
-            markers={markers}
+        <div className="xl:col-span-4 min-w-0">
+          <StreetDrainageFeedPanel
+            hubCity={hub.city}
+            segments={evaluatedSegments}
+            waterDepthM={waterDepthM}
+            selectedSegmentId={selectedSegmentId}
+            onInspectSegment={(seg) => {
+              setSelectedSegmentId(seg.id);
+              setFocusedCoord({ lat: seg.lat, lng: seg.lng, zoom: 14 });
+            }}
+            onResetOverview={() => {
+              setSelectedSegmentId(null);
+              setFocusedCoord(null);
+            }}
+            lastSyncedLabel={lastSyncedLabel}
+          />
+        </div>
+      </div>
+
+      {/* Bottom Operational Row: Route Intelligence + Scenario Simulator + Drainage & Infrastructure */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+        <div className="lg:col-span-4 min-w-0">
+          <EmergencyRoutePanel
+            hubCity={hub.city}
+            segments={evaluatedSegments}
+            focusSegment={focusSegment}
+            selectedRouteId={selectedSegmentId}
+            onSelectRoute={(route) => {
+              setSelectedSegmentId(route.id);
+              setFocusedCoord({ lat: route.lat, lng: route.lng, zoom: 14 });
+            }}
+            corridorIncidents={corridorIncidents}
           />
         </div>
 
-        <HUDPanel title="Street Drainage & Emergency Route Feed" subtitle={hub.city} className="h-[440px]">
-          <div className="space-y-3 overflow-y-auto h-full pr-1 text-xs">
-            {hub.segments.map(seg => {
-              const isFlooded = waterDepthM >= seg.thresholdDepthM;
-              return (
-                <div
-                  key={seg.id}
-                  className={`p-3 rounded-2xl border space-y-1.5 ${
-                    isFlooded ? 'bg-red-50/80 border-red-200' : seg.role === 'safe_evac' ? 'bg-emerald-50/80 border-emerald-200' : 'bg-slate-50 border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-black text-slate-800 flex items-center gap-1.5">
-                      {isFlooded ? <AlertTriangle className="w-3.5 h-3.5 text-red-600" /> : <Route className="w-3.5 h-3.5 text-emerald-600" />}
-                      {seg.name}
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                        isFlooded ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'
-                      }`}
-                    >
-                      {isFlooded ? 'IMPASSABLE' : 'OPEN'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-600">{seg.note}</p>
-                  <div className="text-[10px] font-mono text-slate-500">
-                    Critical Threshold: {seg.thresholdDepthM}m • Simulated Depth: {waterDepthM.toFixed(1)}m
-                  </div>
-                </div>
-              );
-            })}
-            <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200 text-[10.5px] text-sky-900 flex items-center gap-2">
-              <Navigation className="w-4 h-4 text-sky-600 flex-shrink-0" />
-              <span>
-                Patrol dispatch automatically avoids roads flagged IMPASSABLE and routes emergency vehicles along OPEN elevated spines.
-              </span>
-            </div>
-          </div>
-        </HUDPanel>
+        <div className="lg:col-span-4 min-w-0">
+          <WaterloggingSimulatorCard
+            waterDepthM={waterDepthM}
+            onChangeWaterDepthM={setWaterDepthM}
+            onResetScenario={() => setWaterDepthM(0.1)}
+            onFocusImpactOnMap={() => {
+              const target = evaluatedSegments.find(s => s.isFlooded) || evaluatedSegments[0];
+              if (target) {
+                setSelectedSegmentId(target.id);
+                setFocusedCoord({ lat: target.lat, lng: target.lng, zoom: 13 });
+              }
+            }}
+            segments={evaluatedSegments}
+          />
+        </div>
+
+        <div className="lg:col-span-4 min-w-0">
+          <DrainageInfrastructurePanel
+            hubCity={hub.city}
+            drainCapacityMmHr={hub.drainCapacityMmHr}
+            liveRainMm={weather?.precipitationMm ?? null}
+            segments={evaluatedSegments}
+            tacticalFacilities={tacticalFacilities}
+            verifiedHospitals={verifiedHospitals}
+            lastSyncedLabel={lastSyncedLabel}
+            onFocusCoordinate={(lat, lng) => {
+              setFocusedCoord({ lat, lng, zoom: 15 });
+            }}
+          />
+        </div>
       </div>
     </div>
   );
