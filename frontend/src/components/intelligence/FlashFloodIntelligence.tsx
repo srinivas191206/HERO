@@ -42,7 +42,8 @@ interface FlashFloodIntelligenceProps {
 }
 
 export const FlashFloodIntelligence: React.FC<FlashFloodIntelligenceProps> = ({ onInspectIn3D }) => {
-  const [evaluations, setEvaluations] = useState<EvaluatedBasin[]>([]);
+  const [weatherMap, setWeatherMap] = useState<Record<string, PointWeatherTelemetry>>({});
+  const [terrainMap, setTerrainMap] = useState<Record<string, TerrainSample>>({});
   const [selectedBasinId, setSelectedBasinId] = useState<string>('araku');
   const [rainSimBoostMm, setRainSimBoostMm] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
@@ -54,20 +55,14 @@ export const FlashFloodIntelligence: React.FC<FlashFloodIntelligenceProps> = ({ 
         fetchBatchWeather(AP_HILLY_BASINS.map(b => ({ lat: b.lat, lng: b.lng }))).catch(() => []),
         Promise.all(AP_HILLY_BASINS.map(b => sampleTerrainAndSlope(b.lat, b.lng, 450)))
       ]);
-
-      const next: EvaluatedBasin[] = AP_HILLY_BASINS.map((basin, idx) => {
-        const weather = weatherList[idx];
-        const terrain = terrainList[idx] || { elevationMeters: 450, slopeDegrees: 8, source: 'fallback' };
-        const rainFactor = Math.min(40, (((weather?.peak3hRainMm ?? 0) + rainSimBoostMm) / 60) * 40);
-        const soilFactor = Math.min(30, ((weather?.soilMoistureTop ?? 0.25) / 0.45) * 30);
-        const slopeFactor = Math.min(20, (terrain.slopeDegrees / 22) * 20);
-        const histFactor = Math.min(10, (basin.historicalCount / 12) * 10);
-        const score = Math.round(rainFactor + soilFactor + slopeFactor + histFactor);
-        const tier: EvaluatedBasin['riskTier'] =
-          score >= 70 ? 'CRITICAL' : score >= 50 ? 'HIGH' : score >= 30 ? 'MODERATE' : 'LOW';
-        return { basin, weather, terrain, riskScore: score, riskTier: tier };
+      const wObj: Record<string, PointWeatherTelemetry> = {};
+      const tObj: Record<string, TerrainSample> = {};
+      AP_HILLY_BASINS.forEach((b, idx) => {
+        if (weatherList[idx]) wObj[b.id] = weatherList[idx];
+        if (terrainList[idx]) tObj[b.id] = terrainList[idx];
       });
-      setEvaluations(next);
+      setWeatherMap(wObj);
+      setTerrainMap(tObj);
     } finally {
       setLoading(false);
     }
@@ -75,8 +70,22 @@ export const FlashFloodIntelligence: React.FC<FlashFloodIntelligenceProps> = ({ 
 
   useEffect(() => {
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rainSimBoostMm]);
+  }, []);
+
+  const evaluations: EvaluatedBasin[] = useMemo(() => {
+    return AP_HILLY_BASINS.map(basin => {
+      const weather = weatherMap[basin.id];
+      const terrain = terrainMap[basin.id] || { elevationMeters: 450, slopeDegrees: 8.5, source: 'fallback' as const };
+      const rainFactor = Math.min(40, (((weather?.peak3hRainMm ?? 0) + rainSimBoostMm) / 60) * 40);
+      const soilFactor = Math.min(30, ((weather?.soilMoistureTop ?? 0.25) / 0.45) * 30);
+      const slopeFactor = Math.min(20, (terrain.slopeDegrees / 22) * 20);
+      const histFactor = Math.min(10, (basin.historicalCount / 12) * 10);
+      const score = Math.round(rainFactor + soilFactor + slopeFactor + histFactor);
+      const tier: EvaluatedBasin['riskTier'] =
+        score >= 70 ? 'CRITICAL' : score >= 50 ? 'HIGH' : score >= 30 ? 'MODERATE' : 'LOW';
+      return { basin, weather, terrain, riskScore: score, riskTier: tier };
+    });
+  }, [weatherMap, terrainMap, rainSimBoostMm]);
 
   const activeEval = useMemo(
     () => evaluations.find(e => e.basin.id === selectedBasinId) || evaluations[0],

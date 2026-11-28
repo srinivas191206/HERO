@@ -48,12 +48,17 @@ export const HeatwaveIntelligence: React.FC<HeatwaveIntelligenceProps> = ({ onIn
 
   const loadAll = useCallback(async () => {
     setLoading(true);
+    // Load local 28-district GeoJSON immediately so choropleth draws in <100ms
+    if (!geojsonData) {
+      fetch('/gis-3d/data/ap_districts.geojson')
+        .then(r => (r.ok ? r.json() : null))
+        .then(gj => {
+          if (gj) setGeojsonData(gj);
+        })
+        .catch(() => {});
+    }
     try {
-      const [gj, batch] = await Promise.all([
-        geojsonData ? Promise.resolve(geojsonData) : fetch('/gis-3d/data/ap_districts.geojson').then(r => r.json()).catch(() => null),
-        fetchBatchWeather(AP_DISTRICTS.map(d => ({ lat: d.centerLat, lng: d.centerLng }))).catch(() => [])
-      ]);
-      if (gj && !geojsonData) setGeojsonData(gj);
+      const batch = await fetchBatchWeather(AP_DISTRICTS.map(d => ({ lat: d.centerLat, lng: d.centerLng }))).catch(() => []);
       const map: Record<string, PointWeatherTelemetry> = {};
       AP_DISTRICTS.forEach((d, i) => {
         if (batch[i]) map[d.district] = batch[i];

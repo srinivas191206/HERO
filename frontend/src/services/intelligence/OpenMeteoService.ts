@@ -33,7 +33,14 @@ export interface RiverDischargeTelemetry {
 
 const weatherCache = new Map<string, PointWeatherTelemetry>();
 const floodCache = new Map<string, RiverDischargeTelemetry>();
+const inFlightBatch = new Map<string, Promise<PointWeatherTelemetry[]>>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+function fetchWithTimeout(url: string, ms = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+}
 
 function parsePointWeather(item: any, lat: number, lng: number): PointWeatherTelemetry {
   const hourly = item?.hourly || {};
@@ -94,7 +101,7 @@ export async function fetchPointWeather(lat: number, lng: number): Promise<Point
     `&hourly=precipitation,apparent_temperature,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm` +
     `&forecast_days=3&timezone=Asia%2FKolkata`;
 
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, 8000);
   if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`);
   const data = await res.json();
   const parsed = parsePointWeather(data, lat, lng);
@@ -110,23 +117,43 @@ export async function fetchBatchWeather(
     return [await fetchPointWeather(points[0].lat, points[0].lng)];
   }
 
+  // Return immediately from cache if all requested coordinates are fresh
+  const now = Date.now();
+  const cachedAll = points.map(p => weatherCache.get(`${p.lat.toFixed(3)},${p.lng.toFixed(3)}`));
+  if (cachedAll.every(c => c && now - c.fetchedAt < CACHE_TTL_MS)) {
+    return cachedAll as PointWeatherTelemetry[];
+  }
+
   const lats = points.map(p => p.lat.toFixed(4)).join(',');
   const lngs = points.map(p => p.lng.toFixed(4)).join(',');
+  const batchKey = `${lats}|${lngs}`;
+  const pending = inFlightBatch.get(batchKey);
+  if (pending) return pending;
+
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lngs}` +
     `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m` +
     `&hourly=precipitation,apparent_temperature,soil_moisture_0_to_7cm,soil_moisture_7_to_28cm` +
     `&forecast_days=3&timezone=Asia%2FKolkata`;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Open-Meteo batch HTTP ${res.status}`);
-  const data = await res.json();
-  const list = Array.isArray(data) ? data : [data];
-  return list.map((item, i) => {
-    const parsed = parsePointWeather(item, points[i]?.lat ?? 0, points[i]?.lng ?? 0);
-    weatherCache.set(`${points[i].lat.toFixed(3)},${points[i].lng.toFixed(3)}`, parsed);
-    return parsed;
-  });
+  const reqPromise = (async () => {
+    try {
+      const res = await fetchWithTimeout(url, 9000);
+      if (!res.ok) throw new Error(`Open-Meteo batch HTTP ${res.status}`);
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : [data];
+      return list.map((item, i) => {
+        const parsed = parsePointWeather(item, points[i]?.lat ?? 0, points[i]?.lng ?? 0);
+        weatherCache.set(`${points[i].lat.toFixed(3)},${points[i].lng.toFixed(3)}`, parsed);
+        return parsed;
+      });
+    } finally {
+      inFlightBatch.delete(batchKey);
+    }
+  })();
+
+  inFlightBatch.set(batchKey, reqPromise);
+  return reqPromise;
 }
 
 export async function fetchRiverDischarge(lat: number, lng: number): Promise<RiverDischargeTelemetry> {

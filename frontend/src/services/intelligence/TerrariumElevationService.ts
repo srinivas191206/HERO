@@ -5,6 +5,7 @@ export interface TerrainSample {
 }
 
 const tileCache = new Map<string, ImageData>();
+const tileInFlight = new Map<string, Promise<ImageData>>();
 
 function latLngToTilePixel(lat: number, lng: number, zoom: number) {
   const n = Math.pow(2, zoom);
@@ -25,24 +26,44 @@ async function loadTerrariumTile(z: number, x: number, y: number): Promise<Image
   const cached = tileCache.get(key);
   if (cached) return cached;
 
+  const existing = tileInFlight.get(key);
+  if (existing) return existing;
+
   const url = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+  const promise = new Promise<ImageData>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Terrarium timeout')), 4000);
     const el = new Image();
     el.crossOrigin = 'anonymous';
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error('Terrarium tile load failed'));
+    el.onload = () => {
+      clearTimeout(timer);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas 2D unavailable'));
+          return;
+        }
+        ctx.drawImage(el, 0, 0);
+        const imageData = ctx.getImageData(0, 0, 256, 256);
+        tileCache.set(key, imageData);
+        resolve(imageData);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    el.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error('Terrarium tile load failed'));
+    };
     el.src = url;
+  }).finally(() => {
+    tileInFlight.delete(key);
   });
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas 2D unavailable');
-  ctx.drawImage(img, 0, 0);
-  const imageData = ctx.getImageData(0, 0, 256, 256);
-  tileCache.set(key, imageData);
-  return imageData;
+  tileInFlight.set(key, promise);
+  return promise;
 }
 
 function decodeTerrariumPixel(imageData: ImageData, pxX: number, pxY: number): number {

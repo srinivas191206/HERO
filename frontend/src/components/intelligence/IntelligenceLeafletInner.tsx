@@ -58,21 +58,21 @@ export interface IntelligenceLeafletMapProps {
 }
 
 const BASEMAP_URLS: Record<BasemapKind, { label: string; url: string }> = {
-  street: {
-    label: 'Streets',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
-  },
   osm: {
     label: 'OSM',
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
   },
+  street: {
+    label: 'Streets',
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+  },
   satellite: {
     label: 'Satellite',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
   },
   topo: {
     label: 'Terrain',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'
   }
 };
 
@@ -90,8 +90,14 @@ export default function IntelligenceLeafletInner({
   className = ''
 }: IntelligenceLeafletMapProps) {
   const initialBasemap: BasemapKind =
-    baseStyle === 'topo' ? 'topo' : baseStyle === 'satellite' ? 'satellite' : baseStyle === 'osm' ? 'osm' : 'street';
+    baseStyle === 'topo' ? 'topo' : baseStyle === 'satellite' ? 'satellite' : 'osm';
   const [basemap, setBasemap] = React.useState<BasemapKind>(initialBasemap);
+  const prevBasemapRef = useRef<BasemapKind>(initialBasemap);
+  const prevViewRef = useRef<{ lat: number; lng: number; zoom: number }>({
+    lat: center[0],
+    lng: center[1],
+    zoom
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const baseLayerRef = useRef<L.TileLayer | null>(null);
@@ -139,19 +145,23 @@ export default function IntelligenceLeafletInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Swap basemap layer cleanly without API keys
+  // Swap basemap layer cleanly without API keys only when user changes selection
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || prevBasemapRef.current === basemap) return;
+    prevBasemapRef.current = basemap;
     if (baseLayerRef.current) {
       map.removeLayer(baseLayerRef.current);
     }
     baseLayerRef.current = L.tileLayer(BASEMAP_URLS[basemap].url, { maxZoom: 18, zIndex: 1 }).addTo(map);
   }, [basemap]);
 
-  // Re-center / zoom cleanly when requested
+  // Re-center / zoom cleanly only when target view changes
   useEffect(() => {
     if (!mapRef.current) return;
+    const prev = prevViewRef.current;
+    if (prev.lat === center[0] && prev.lng === center[1] && prev.zoom === zoom) return;
+    prevViewRef.current = { lat: center[0], lng: center[1], zoom };
     mapRef.current.flyTo(center, zoom, { duration: 0.7 });
   }, [center[0], center[1], zoom]);
 

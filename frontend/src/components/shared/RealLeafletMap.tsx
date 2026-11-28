@@ -92,11 +92,11 @@ export default function RealLeafletMap({
     });
     new (OfflineGridLayer as any)({ zIndex: 0 }).addTo(map);
 
-    // Free API-keyless Esri World Street Map tiles (with offline grid underneath)
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    // Free API-keyless OpenStreetMap + Esri World Street Map tiles (with offline grid underneath)
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       zIndex: 1,
-      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ'
+      attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
     // Create a layer group to hold dynamic markers so we can clear/refresh them easily
